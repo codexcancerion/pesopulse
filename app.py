@@ -50,6 +50,13 @@ SECTIONS = [
     "4. LPCC Supply-Shock Simulator",
 ]
 
+SECTION_PURPOSES = [
+    "Establishes how inflation swings across time, regions, and ordinary versus Bottom-30% household budgets.",
+    "Locates chronic high-breach provinces and traces how food, power, and fuel transmit into local baskets.",
+    "Validates blind 2025–2026 forecasts, calibrates early >4.0% price alerts, and isolates sudden shock misses.",
+    "Simulates how rice, electricity, and diesel shocks shift next-month ordinary and Bottom-30% inflation.",
+]
+
 FEATURE_LABELS = {
     "headline_yoy_pct": "Current Headline Inflation (%)",
     "yoy_roll3_mean": "3-Month Inflation Momentum (%)",
@@ -454,31 +461,44 @@ def main():
         st.caption(f"`{int(kpi['n_geos'])}` localities · `{int(kpi['n_obs']):,}` records · `{yr_range[0]}–{yr_range[1]}`")
 
     # ------------------------------------------------------------------
-    # Streamlined 3-KPI Strip
+    # Streamlined 3-KPI Strip (With Practical Number Meaning)
     # ------------------------------------------------------------------
+    mean_yoy_f = float(kpi["mean_yoy"])
+    mean_b30_f = float(kpi["mean_b30"])
+    b30_gap_f = mean_b30_f - mean_yoy_f
     c1, c2, c3 = st.columns(3)
     c1.metric(
         "Ordinary Household Inflation",
-        f"{kpi['mean_yoy']:.2f}%",
-        "All-Income Mean YoY",
+        f"{mean_yoy_f:.2f}%",
+        f"₱1,000 basket → ₱{1000 * (1 + mean_yoy_f / 100):.0f}/yr",
+        delta_color="off",
         border=True,
-        help="Average year-on-year CPI inflation across all income households in the selected provinces and years.",
+        help=(
+            f"Average year-on-year CPI inflation for all-income households. At {mean_yoy_f:.2f}%, a ₱1,000 monthly "
+            f"basket from one year earlier costs roughly ₱{1000 * (1 + mean_yoy_f / 100):.0f} today."
+        ),
     )
     c2.metric(
         "Bottom-30% Household Inflation",
-        f"{kpi['mean_b30']:.2f}%",
-        f"{(kpi['mean_b30'] - kpi['mean_yoy']):+.2f} pp vs Ordinary",
+        f"{mean_b30_f:.2f}%",
+        f"{b30_gap_f:+.2f} pp vs Ordinary",
         delta_color="inverse",
         border=True,
-        help="Average inflation faced by the lowest-income 30% of families. Positive deltas show regressive price pressure.",
+        help=(
+            f"Average inflation for the lowest-income 30% of families. A {b30_gap_f:+.2f} percentage-point gap means "
+            "poorer families face faster price increases than general shoppers because rice takes more of their budget."
+        ),
     )
     c3.metric(
         ">4.0% Alert Frequency",
         f"{kpi['breach_pct']:.1f}%",
-        "Province-Months Above Ceiling",
+        "Months Above 4% Ceiling",
         delta_color="off",
         border=True,
-        help="Share of province-months exceeding the 4.0% official upper price-stability benchmark.",
+        help=(
+            f"{kpi['breach_pct']:.1f}% of all province-months crossed the 4.0% official upper price-stability line, "
+            "signaling periods where local price councils must intensify retail monitoring."
+        ),
     )
 
     # ------------------------------------------------------------------
@@ -494,6 +514,7 @@ def main():
                 type="primary" if i == active_idx else "secondary",
                 on_click=go_to_section,
                 args=(i,),
+                help=SECTION_PURPOSES[i],
                 width="stretch",
             )
 
@@ -504,11 +525,16 @@ def main():
     # ==================================================================
     if active_idx == 0:
         st.subheader("Why Staple Shocks Hit Low-Income Households Hardest")
+        st.caption(
+            "**Purpose of this view:** Establish how unevenly inflation moves across time, regions, and income groups "
+            "before zooming into specific provinces. **Components:** monthly price timeline, provincial shock "
+            "distribution, regional median rankings, retail rice pass-through scatter, and household budget donuts."
+        )
         st.markdown(
             "A single national inflation headline hides the sharpest pain points local price councils have to manage. "
             "Between January 2019 and October 2026, Philippine inflation surged to `8.7%` in early 2023, cooled to "
-            "`0.9%` in July 2025, and rebounded to `7.8%` in October 2026. Watching ordinary inflation alone misses "
-            "how aggressively staple rice spikes pull low-income household costs above the `4.0%` benchmark."
+            "`0.9%` in July 2025, and rebounded to `7.8%` in October 2026. In everyday terms, `7.8%` inflation means "
+            "a household spending `₱10,000` on basic goods last year must now find `₱10,780` for the exact same items."
         )
 
         # Basic 1: Line Chart
@@ -582,8 +608,9 @@ def main():
             fig_hist.update_layout(height=335, margin=dict(t=42, b=18))
             st.plotly_chart(fig_hist, width="stretch")
             st.caption(
-                f"Right-skewed tail (`Skew = 0.50`, `Kurtosis = 3.25`). Readings beyond the `{tukey_hi}%` Tukey upper "
-                "fence reflect severe localized commodity shocks."
+                f"Each bar counts how many province-months landed at that inflation rate. Readings beyond the "
+                f"`{tukey_hi}%` Tukey upper fence (`1.5x` the middle spread) signal severe local supply shocks rather "
+                "than normal seasonal fluctuation."
             )
 
         with col_b:
@@ -703,8 +730,9 @@ def main():
             )
             st.plotly_chart(fig_pie, width="stretch")
             st.caption(
-                f"Bottom-30% households allocate `{bsk['b30_rice']:.1f}%` of their total budget to rice alone versus "
-                f"`{bsk['gen_rice']:.1f}%` for ordinary households."
+                f"Bottom-30% households spend roughly `₱{bsk['b30_rice'] * 10:.0f}` out of every `₱1,000` on rice alone "
+                f"(`{bsk['b30_rice']:.1f}%`) compared with `₱{bsk['gen_rice'] * 10:.0f}` (`{bsk['gen_rice']:.1f}%`) for "
+                "ordinary households, magnifying every staple price jump."
             )
 
         if summary:
@@ -739,6 +767,11 @@ def main():
     # ==================================================================
     elif active_idx == 1:
         st.subheader("Where Local Price Pressure Clusters & How Shocks Travel")
+        st.caption(
+            "**Purpose of this view:** Locate chronic provincial hotspots and trace which commodity channels drive "
+            "local inflation. **Components:** 101-locality geospatial bubble map, regional spending sunburst, "
+            "cost-channel Sankey flow, five-axis compound shock profile, and category contribution stream."
+        )
         st.markdown(
             "Regional averages still conceal which exact municipalities need market inspections or Kadiwa rolling "
             "stores first. Outer-island supply corridors face freight bottlenecks that push local inflation past the "
@@ -928,6 +961,12 @@ def main():
     # ==================================================================
     elif active_idx == 2:
         st.subheader("Blind 2025–2026 Forecasts, Uncertainty & Early Price Alerts")
+        st.caption(
+            "**Purpose of this view:** Validate next-month forecast reliability on unseen data, tune early `>4.0%` "
+            "council alert cutoffs, and diagnose abrupt supply-shock misses. **Components:** out-of-time accuracy "
+            "summary, multi-month SARIMAX fan chart, expandable TreeSHAP drivers, interactive ROC alert curve, and "
+            "cross-filtered shock-miss inspector."
+        )
         st.markdown(
             "To prevent future price trends from leaking into evaluation, every model trains strictly on `2020–2024` "
             "and is tested blind on `2,020` paired provincial holdout months across `2025–2026`. Linear **Ridge "
@@ -936,10 +975,13 @@ def main():
         )
 
         st.info(
-            f"**Verified Out-of-Time Holdout Accuracy (`2025–2026`):** "
-            f"Ordinary Household Ridge **`{eng['ridge_mae']:.2f} pp` MAE** (`R² = {eng['ridge_r2']:.3f}`) · "
-            f"Bottom-30% Household Ridge **`{eng['b30_mae']:.2f} pp` MAE** (`R² = {eng['b30_r2']:.3f}`) · "
-            f"XGBoost `>4.0%` Price-Alert Classifier **`{eng['clf_acc']:.1%}` Accuracy** (`ROC-AUC = {eng['clf_auc']:.3f}`)."
+            f"**What the Holdout Accuracy Numbers Mean (`2025–2026`):** "
+            f"Ordinary Ridge averages **`{eng['ridge_mae']:.2f} pp` MAE** (`R² = {eng['ridge_r2']:.3f}`), meaning "
+            f"forecasts typically land within `1` percentage point of the actual PSA release and explain "
+            f"`{eng['ridge_r2'] * 100:.0f}%` of provincial variation. Bottom-30% Ridge averages **`{eng['b30_mae']:.2f} pp` "
+            f"MAE** (`R² = {eng['b30_r2']:.3f}`), while the XGBoost alert model flags `>4.0%` surges at "
+            f"**`{eng['clf_acc']:.1%}` accuracy** (`ROC-AUC = {eng['clf_auc']:.3f}`, indicating near-complete separation "
+            "between calm and overheating months)."
         )
 
         # 1. Dynamic SARIMAX Fan Chart with Inline Horizon Control
@@ -1086,8 +1128,9 @@ def main():
             )
             st.plotly_chart(fig_roc, width="stretch")
             st.caption(
-                f"**At τ = `{tau:.2f}`:** Caught `{tp}` surges · `{fp}` false alarms · `{fn}` missed · "
-                f"`Precision = {prec_v:.1%}`, `Recall = {rec_v:.1%}`."
+                f"**At τ = `{tau:.2f}`:** The model caught **`{tp}`** real surges, missed **`{fn}`**, and raised "
+                f"**`{fp}`** false alarms. Precision of **`{prec_v:.1%}`** means roughly `{round(prec_v * 10)}` in `10` "
+                f"council alerts are genuine, while Recall of **`{rec_v:.1%}`** shows the share of true surges caught early."
             )
 
         with diag_r:
@@ -1151,11 +1194,17 @@ def main():
     # ==================================================================
     else:
         st.subheader("LPCC Next-Month Shock Simulator: Ordinary vs. Bottom-30% Households")
+        st.caption(
+            "**Purpose of this view:** Translate hypothetical rice, electricity, and diesel price jumps into concrete "
+            "next-month forecasts and local council action plans. **Components:** one-click shock presets, three "
+            "commodity sliders, dual household forecast cards, trajectory plot with `80%` risk band, optional "
+            "second-locality comparison, and LPCC policy advisory."
+        )
         st.markdown(
             "When a typhoon damages palay harvests or global crude spikes raise pump prices, local councils need "
             "immediate household estimates before the next PSA release. Choose a locality and adjust **rice, "
-            "electricity, and diesel** below to compute both ordinary and Bottom-30% next-month forecasts using "
-            "official local CPI basket weights."
+            "electricity, and diesel** below to see how percentage-point (`pp`) price shifts pass through official "
+            "local CPI weights into ordinary and Bottom-30% household budgets next month."
         )
 
         p1, p2, p3, p4 = st.columns(4)
@@ -1323,10 +1372,13 @@ def main():
             st.plotly_chart(fig_sim, width="stretch")
 
         if res_main["sim_prob"] >= 0.50 or res_main["sim_pred"] > 4.0 or res_main["b30_sim_pred"] > 4.0:
+            ord_cost = 10000 * (1 + res_main["sim_pred"] / 100.0)
+            b30_cost = 10000 * (1 + res_main["b30_sim_pred"] / 100.0)
             st.warning(
-                f"**LPCC Action Advisory for {sel_prov}:** Under this scenario, ordinary inflation is projected at "
-                f"**`{res_main['sim_pred']:.2f}%`** and Bottom-30% inflation at **`{res_main['b30_sim_pred']:.2f}%`** "
-                f"(`{res_main['sim_prob']:.1%}` alert probability). Because low-income households in {sel_prov} spend "
+                f"**LPCC Action Advisory for {sel_prov}:** Ordinary inflation is projected at "
+                f"**`{res_main['sim_pred']:.2f}%`** (a `₱10,000` basket from last year costs roughly **`₱{ord_cost:,.0f}`**) "
+                f"and Bottom-30% inflation at **`{res_main['b30_sim_pred']:.2f}%`** (**`₱{b30_cost:,.0f}`**, with "
+                f"`{res_main['sim_prob']:.1%}` alert probability). Because low-income households in {sel_prov} spend "
                 f"**`{res_main['b30_rice_w_pct']:.1f}%`** of their budget on rice versus **`{res_main['w_rice_pct']:.1f}%`** "
                 f"overall, they absorb an extra **`{res_main['b30_extra_pp']:+.2f} pp`** direct rice burden. "
                 "Recommended DTI and DA response: activate LPCC SRP inspections, deploy Kadiwa rolling stores and "
