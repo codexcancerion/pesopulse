@@ -526,9 +526,8 @@ def main():
     if active_idx == 0:
         st.subheader("Why Staple Shocks Hit Low-Income Households Hardest")
         st.caption(
-            "**Purpose of this view:** Establish how unevenly inflation moves across time, regions, and income groups "
-            "before zooming into specific provinces. **Components:** monthly price timeline, provincial shock "
-            "distribution, regional median rankings, retail rice pass-through scatter, and household budget donuts."
+            "Tracks how inflation moves across time, regions, and income groups through monthly price waves, "
+            "provincial shock distributions, regional rankings, retail rice pass-through, and household budget shares."
         )
         st.markdown(
             "A single national inflation headline hides the sharpest pain points local price councils have to manage. "
@@ -768,9 +767,8 @@ def main():
     elif active_idx == 1:
         st.subheader("Where Local Price Pressure Clusters & How Shocks Travel")
         st.caption(
-            "**Purpose of this view:** Locate chronic provincial hotspots and trace which commodity channels drive "
-            "local inflation. **Components:** 101-locality geospatial bubble map, regional spending sunburst, "
-            "cost-channel Sankey flow, five-axis compound shock profile, and category contribution stream."
+            "Maps chronic provincial hotspots and traces commodity drivers using a 101-locality bubble map, "
+            "regional spending sunburst, cost-channel Sankey flow, compound shock profile, and category stream."
         )
         st.markdown(
             "Regional averages still conceal which exact municipalities need market inspections or Kadiwa rolling "
@@ -962,10 +960,8 @@ def main():
     elif active_idx == 2:
         st.subheader("Blind 2025–2026 Forecasts, Uncertainty & Early Price Alerts")
         st.caption(
-            "**Purpose of this view:** Validate next-month forecast reliability on unseen data, tune early `>4.0%` "
-            "council alert cutoffs, and diagnose abrupt supply-shock misses. **Components:** out-of-time accuracy "
-            "summary, multi-month SARIMAX fan chart, expandable TreeSHAP drivers, interactive ROC alert curve, and "
-            "cross-filtered shock-miss inspector."
+            "Evaluates blind next-month forecast accuracy, multi-month SARIMAX uncertainty bands, TreeSHAP drivers, "
+            "interactive >4.0% council alert cutoffs, and abrupt supply-shock misses."
         )
         st.markdown(
             "To prevent future price trends from leaking into evaluation, every model trains strictly on `2020–2024` "
@@ -1195,10 +1191,8 @@ def main():
     else:
         st.subheader("LPCC Next-Month Shock Simulator: Ordinary vs. Bottom-30% Households")
         st.caption(
-            "**Purpose of this view:** Translate hypothetical rice, electricity, and diesel price jumps into concrete "
-            "next-month forecasts and local council action plans. **Components:** one-click shock presets, three "
-            "commodity sliders, dual household forecast cards, trajectory plot with `80%` risk band, optional "
-            "second-locality comparison, and LPCC policy advisory."
+            "Translates hypothetical rice, electricity, and diesel price jumps into next-month ordinary and "
+            "Bottom-30% forecasts, an 80% risk trajectory, optional cross-province comparisons, and LPCC advisories."
         )
         st.markdown(
             "When a typhoon damages palay harvests or global crude spikes raise pump prices, local councils need "
