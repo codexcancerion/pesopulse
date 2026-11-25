@@ -1399,10 +1399,10 @@ def main():
         )
 
     # ------------------------------------------------------------------
-    # DuckDB SQL Audit Expander
+    # DuckDB SQL Audit & Verified Data Sources Expander
     # ------------------------------------------------------------------
     st.markdown("")
-    with st.expander("DuckDB SQL Audit Trail (<1,000 Aggregated Rows per View)"):
+    with st.expander("DuckDB SQL Audit Trail & Verified PSA OpenSTAT Sources"):
         st.caption(
             "Every visualization queries DuckDB SQL over `2.2 MB` ZSTD Parquet marts so strictly fewer than "
             "`1,000` aggregated rows reach Plotly."
@@ -1410,6 +1410,19 @@ def main():
         for q_title, row_cnt, q_sql in audit_queries:
             st.markdown(f"**{q_title}** · `{row_cnt:,}` rows")
             st.code(q_sql.strip(), language="sql")
+        st.divider()
+        st.markdown(
+            "**Verified PSA OpenSTAT Source Tables (PxWeb `2M`):**\n"
+            "1. [CPI All-Income `2018=100` (`0012M4ACP22.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP22.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP22.px)\n"
+            "2. [Official CPI YoY `%` (`0012M4ACP23.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP23.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP23.px)\n"
+            "3. [CPI 2018 Basket Weights (`0012M4ACP25.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP25.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP25.px)\n"
+            "4. [Purchasing Power of Peso (`0012M4ACP24.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP24.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP24.px)\n"
+            "5. [National Core CPI YoY `%` (`0012M4ACP31.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP31.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP31.px)\n"
+            "6. [Bottom-30% CPI YoY `%` (`0022M4ABIR2.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__BIH__2018NEW/0022M4ABIR2.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/BIH/2018NEW/0022M4ABIR2.px)\n"
+            "7. [Bottom-30% CPI Weights (`0022M4ABIR3.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__BIH__2018NEW/0022M4ABIR3.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/BIH/2018NEW/0022M4ABIR3.px)\n"
+            "8. [General Wholesale Price Index (`0032M4AWPI1.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__WPI__2012/0032M4AWPI1.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/WPI/2012/0032M4AWPI1.px)\n"
+            "9. [Provincial Retail Rice Prices (`0042M4ARN01.px`)](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__2018NEW/0042M4ARN01.px/) · [API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/2018NEW/0042M4ARN01.px)"
+        )
 
 
 if __name__ == "__main__":

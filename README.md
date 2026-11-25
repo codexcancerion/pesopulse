@@ -24,17 +24,19 @@ Built specifically for **DTI and Department of Agriculture Local Price Coordinat
 
 ## 2. Verified Philippine Government Data Sources (PSA OpenSTAT `2M`)
 
-All datasets originate from official **Philippine Statistics Authority (PSA) OpenSTAT** tables (`openstat.psa.gov.ph`), joined deterministically by `src/duckdb_pipeline.py`:
+All 9 source tables originate from official **Philippine Statistics Authority (PSA) OpenSTAT** endpoints (`https://openstat.psa.gov.ph`), joined deterministically by `src/duckdb_pipeline.py`:
 
-| PSA PxWeb Table ID | Role in LPCC Analysis | Scope & Granularity |
-| :--- | :--- | :--- |
-| `0012M4ACP22.px` | Base monthly CPI (`2018=100`) | `120` geolocations × `354` COICOP items, `Jan 2018 – Oct 2026` (`4.50M` cells) |
-| `0012M4ACP23.px` | Official Year-on-Year Inflation (`%`) | `120` geolocations × key COICOP divisions (`230,400` rows) |
-| `0012M4ACP25.px` | Local `2018=100` CPI Basket Weights | Within-province expenditure shares for rice, utilities, and fuel (`42,480` rows) |
-| `0022M4ABIR2.px` & `IR3.px` | Bottom-30% Household CPI & Weights | Low-income YoY inflation and staple basket shares across `120` geos (`104,760` rows) |
-| `0042M4ARN01.px` | Provincial Retail Rice Prices (`PHP/kg`) | Well-milled and regular-milled retail rice series (`25,704` rows) |
-| `0032M4AWPI1.px` | Island Wholesale Price Index (`GWPI`) | Upstream Luzon, Visayas, and Mindanao cost-push series (`1,296` rows) |
-| `0012M4ACP24.px` & `31.px` | Purchasing Power & Core CPI | Real peso purchasing power and non-food baseline (`14,592` rows) |
+| # | Official PSA Table Title | Table ID | Direct Links | Analytical Role & Scale |
+| :---: | :--- | :--- | :--- | :--- |
+| 1 | Consumer Price Index for All Income Households by Commodity Group (`2018=100`): Jan 2018 to Oct 2026 | `0012M4ACP22.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP22.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP22.px) | Base monthly CPI across `120` geos × `354` items (`4.50M` cells) |
+| 2 | Year-on-Year Changes of the Consumer Price Index in Percent by Commodity Group (`2018=100`): Jan 2019 to Oct 2026 | `0012M4ACP23.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP23.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP23.px) | Official Year-on-Year inflation `%` targets (`230,400` rows) |
+| 3 | Weights by Commodity Group for Consumer Price Index (CPI), 2018-based | `0012M4ACP25.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP25.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP25.px) | Local `2018=100` expenditure shares for rice, power & fuel (`42,480` rows) |
+| 4 | Purchasing Power of Peso (`2018=100`): Jan 2018 to Oct 2026 | `0012M4ACP24.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP24.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP24.px) | Real value of a `2018` peso across `120` geos (`12,960` rows) |
+| 5 | Year-on-Year Changes of the Core Consumer Price Index in Percent by Commodity Group (`2018=100`) in the Philippines: Jan 2019 to Oct 2026 | `0012M4ACP31.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__CPI__2018NEW/0012M4ACP31.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/CPI/2018NEW/0012M4ACP31.px) | National non-food/energy Core CPI baseline (`1,632` rows) |
+| 6 | Year-on-Year Changes of the Consumer Price Index for Bottom 30% Income Households in Percent by Commodity Group (`2018=100`): Jan 2019 to Oct 2026 | `0022M4ABIR2.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__BIH__2018NEW/0022M4ABIR2.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/BIH/2018NEW/0022M4ABIR2.px) | Bottom-30% low-income monthly YoY inflation (`103,680` rows) |
+| 7 | Consumer Price Index for Bottom 30% Income Households Weights (`2018=100`) | `0022M4ABIR3.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__BIH__2018NEW/0022M4ABIR3.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/BIH/2018NEW/0022M4ABIR3.px) | Bottom-30% local rice & food basket shares (`1,080` rows) |
+| 8 | General Wholesale Price Index by Commodity Group (`2012=100`): Jan 2012 to Sep 2026 | `0032M4AWPI1.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__PI__WPI__2012/0032M4AWPI1.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/PI/WPI/2012/0032M4AWPI1.px) | Upstream Luzon, Visayas & Mindanao wholesale cost-push (`1,296` rows) |
+| 9 | Cereals: Retail Prices of Agricultural Commodities by Geolocation, Commodity, Year and Period | `0042M4ARN01.px` | [Web Portal](https://openstat.psa.gov.ph/PXWeb/pxweb/en/DB/DB__2M__2018NEW/0042M4ARN01.px/) · [PxWeb API](https://openstat.psa.gov.ph/PXWeb/api/v1/en/DB/2M/2018NEW/0042M4ARN01.px) | Provincial retail prices (`PHP/kg`) for Well-Milled & Regular-Milled Rice (`25,704` rows) |
 
 * **Runtime Parquet Marts (`2.2 MB` total):** `data/cpi_provincial_ml_panel.parquet` (`10,706` rows across `101` provinces/HUCs, `55` engineered columns) and `data/cpi_division_monthly.parquet` (`254,082` unpivoted division records).
 * **Strict `<1,000`-Row Hygiene:** Every visual queries DuckDB SQL aggregations over Parquet so strictly fewer than `1,000` rows reach Plotly, verifiable live inside the app's **DuckDB SQL Audit Trail**.
