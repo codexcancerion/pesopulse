@@ -50,8 +50,8 @@ def build_pipeline_diagram(out_path: Path) -> None:
         ("1. Raw Government Data", "PSA OpenSTAT\n8 Official Tables\n4.5M Raw CPI Cells\n73.87 MB Source", "#EFF6FF", "#1D4ED8"),
         ("2. DuckDB SQL ETL", "Unpivot 106 Months\nStandardize 101 Geos\nJoin Weights & Rice\nWindow Lag Features", "#F0FDFA", "#0D9488"),
         ("3. Compact Parquet", "ZSTD Columnar Marts\nPanel: 10,706 Rows\nSize: 2.2 MB Total\nFast Cloud Loading", "#FEFCE8", "#CA8A04"),
-        ("4. Forecasting Engine", "Ridge & XGBoost ML\nQuantile 80/95% CI\nSARIMAX Fan Chart\nTreeSHAP Explain", "#FFF7ED", "#EA580C"),
-        ("5. Live Streamlit App", "DuckDB Queries Only\n<1,000 Rows per Chart\n12 Interactive Views\nWhat-If Shock Engine", "#FEF2F2", "#DC2626"),
+        ("4. LPCC ML Engine", "Ridge: All & B30\nXGBoost >4% Alert\nQuantile 80% CI\nSARIMAX & TreeSHAP", "#FFF7ED", "#EA580C"),
+        ("5. Live Streamlit App", "DuckDB Queries Only\n<1,000 Rows per Chart\n4 Connected Views\nLPCC Shock Simulator", "#FEF2F2", "#DC2626"),
     ]
 
     box_w = 1.92
@@ -583,7 +583,7 @@ def main():
 
     b = IEEEPaperBuilder()
     b.add_ieee_header(
-        title="PesoPulse: Forecasting Philippine Provincial Inflation and Supply-Shock Pass-Through Using DuckDB and Visual Analytics",
+        title="PesoPulse: Forecasting Supply-Shock Pass-Through on Ordinary and Bottom-30% Households for Philippine Local Price Coordinating Councils",
         authors=[
             ("Melbert Marafo", "School of Advanced Studies", "Saint Louis University, Baguio City"),
             ("Jhaynher Felix", "School of Advanced Studies", "Saint Louis University, Baguio City"),
@@ -594,8 +594,8 @@ def main():
     b.switch_columns(2)
 
     b.add_abstract(
-        "A single national inflation number hides very different price realities across Philippine provinces. Families in island and rural areas often face much steeper food costs than shoppers in Metro Manila, and low-income households absorb the hardest hit whenever rice prices jump. We built PesoPulse, an end-to-end visual analytics and forecasting platform using eight official Philippine Statistics Authority datasets covering 101 provinces and highly urbanized cities from January 2018 to October 2026. Our DuckDB pipeline reshapes 4.5 million raw price cells into compact Parquet tables totaling 2.2 MB, feeding a live Streamlit dashboard with twelve interactive charts and a supply-shock simulator. Regional inflation differs significantly at p < 0.001, with Region V averaging 4.39% against 3.41% in NCR. During food spikes above 5%, bottom-30% households face 0.95 percentage points higher inflation than the general population. On 2025 to 2026 holdout data, Ridge Regression delivers the best next-month forecast with 0.93 percentage points MAE and R² of 0.874, while XGBoost flags breaches above the 4.0% central bank ceiling at 92.6% accuracy and 0.976 ROC-AUC.",
-        "Consumer Price Index, DuckDB, Inflation Forecasting, PesoPulse, Philippine Statistics Authority, Streamlit, Visual Analytics.",
+        "When rice, electricity, or diesel prices jump, a single national inflation rate tells local price monitors almost nothing about which towns will suffer most next month. Low-income families in island and rural provinces spend a far larger share of their budgets on staple rice than Metro Manila shoppers, yet municipal councils lack a unified tool to measure that gap. We built PesoPulse, a focused visual analytics and forecasting platform for Local Price Coordinating Councils under the Department of Trade and Industry and the Department of Agriculture. Using eight official Philippine Statistics Authority datasets covering 101 provinces and highly urbanized cities from January 2018 to October 2026, our DuckDB pipeline compresses 4.5 million raw price cells into 2.2 MB of Parquet marts powering four connected Streamlit views. Regional inflation diverges significantly at p < 0.001, and during food surges above 5%, bottom-30% households endure 0.95 percentage points higher inflation than ordinary households. On blind 2025 to 2026 holdout months, dual Ridge Regression models forecast next-month ordinary inflation at 0.93 percentage points MAE and 0.874 R² alongside bottom-30% inflation at 1.14 percentage points MAE and 0.874 R², while XGBoost flags breaches above the 4.0% national price-stability benchmark at 92.6% accuracy and 0.976 ROC-AUC.",
+        "Bottom-30% Households, Consumer Price Index, DuckDB, Local Price Coordinating Councils, PesoPulse, Philippine Statistics Authority, Supply-Shock Simulation.",
     )
 
     # ------------------------------------------------------------------
@@ -604,20 +604,20 @@ def main():
     b.add_section_heading("I. Executive Summary and Public Sector Problem Statement")
 
     b.add_para(
-        "Every month, headlines report one national inflation rate for the Philippines. That single average looks simple, yet it misses how unevenly prices rise from one province to another. Between January 2019 and October 2026, national inflation surged to 8.7% in January 2023, cooled to 0.9% in July 2025, and climbed back to 7.8% in October 2026. By October 2026, one peso from 2018 bought only 0.72 pesos of goods on average across provinces, dropping as low as 0.66 pesos in MIMAROPA, Cagayan Valley, and Caraga compared with 0.75 pesos in NCR."
+        "Every month, news headlines report one national inflation rate for the Philippines. That single figure hides sharp local realities across the archipelago. Between January 2019 and October 2026, national inflation surged to 8.7% in January 2023, cooled to 0.9% in July 2025, and climbed back to 7.8% in October 2026. By October 2026, one peso from 2018 bought only 0.72 pesos of goods on average across provinces, dropping as low as 0.66 pesos in MIMAROPA, Cagayan Valley, and Caraga compared with 0.75 pesos in NCR."
     )
 
     b.add_para(
-        "Three public sector agencies face real operational gaps when monitoring these price shifts. First, regional offices of the Bangko Sentral ng Pilipinas need early warning before local inflation crosses the 4.0% upper policy target [7]. Second, Regional Development Councils under NEDA and DEPDev need to see which provinces suffer persistent cost pressure so budget and logistics support go to the right areas. Third, local price councils under DTI and the Department of Agriculture need to estimate how a sudden jump in rice, electricity, or diesel prices will hit ordinary and low-income households next month."
+        "This gap creates an immediate operational blind spot for Local Price Coordinating Councils under the Department of Trade and Industry, the Department of Agriculture, and local government units. These provincial and city councils meet monthly to inspect retail markets, enforce suggested retail prices, deploy Kadiwa rolling stores, and request National Food Authority rice buffer releases. To act before household budgets break, local councils need to estimate how a sudden jump in rice, electricity, or diesel prices will hit ordinary and bottom-30% low-income households in their specific locality next month, using the official 4.0% national ceiling as a practical price-alert trigger [7]."
     )
 
     b.add_para(
-        "Public CPI files from the Philippine Statistics Authority are large, wide spreadsheets spread across separate portals for headline prices, basket weights, bottom-30% households, wholesale prices, and retail rice quotes. Local planners cannot easily combine these files, run statistical checks, or test price shock scenarios without specialized tools. PesoPulse bridges that gap by turning eight official government tables into one fast, transparent web platform."
+        "Official Consumer Price Index files from the Philippine Statistics Authority live across separate wide spreadsheets for headline prices, local basket weights, bottom-30% households, wholesale indices, and retail rice quotes. Local price officers cannot easily merge millions of cells, verify regional inequality statistically, or stress-test staple and fuel shocks without specialized pipelines. PesoPulse solves this operational bottleneck by unifying eight official government tables into one lightweight, transparent web platform."
     )
 
     b.add_fullwidth_figure(
         FIG_DIR / "fig01_national_headline_vs_core_vs_b30.png",
-        "<b>Fig. 1.</b> Philippine monthly headline, core, and bottom-30% inflation from January 2019 to October 2026 against the 2.0% to 4.0% BSP target band.",
+        "<b>Fig. 1.</b> Philippine monthly ordinary headline, core, and bottom-30% inflation from January 2019 to October 2026 against the 2.0% to 4.0% national price-stability band.",
         width_in=6.55,
     )
 
@@ -628,53 +628,53 @@ def main():
 
     b.add_sub_heading("A. Government Data Sources and Schema Design")
     b.add_para(
-        "All inputs come directly from verified Philippine Statistics Authority OpenSTAT tables [1]. The core file is the monthly Consumer Price Index release with 2018 as base year, covering 120 geographic entries and 354 spending items across 106 valid months from January 2018 to October 2026. That single wide file holds 42,480 rows and 4,502,880 monthly price cells at 73.87 MB. To give the forecasting models real economic context, we paired it with seven companion OpenSTAT tables summarized in Table I."
+        "All records originate from verified Philippine Statistics Authority OpenSTAT tables [1]. The foundation is the monthly Consumer Price Index release with 2018 as base year, spanning 120 geographic entries and 354 spending items across 106 valid months from January 2018 to October 2026. That single wide file contains 42,480 rows and 4,502,880 monthly price cells at 73.87 MB. To capture how staple, energy, and wholesale shocks reach ordinary and low-income families, we joined it with seven companion OpenSTAT tables listed in Table I."
     )
 
     b.add_table(
         label="TABLE I",
         title="Verified PSA OpenSTAT Data Sources Joined in DuckDB",
-        headers=["Source Dataset", "Raw Scale", "Analytical Role"],
+        headers=["Source Dataset", "Raw Scale", "LPCC Analytical Role"],
         rows=[
             ["Monthly CPI 2018=100", "4.50M cells", "Base index across 120 geos"],
             ["Official CPI YoY %", "230,400 rows", "Verified inflation targets"],
-            ["2018 Basket Weights", "42,480 rows", "Local category share %"],
+            ["2018 Basket Weights", "42,480 rows", "Local rice, power & fuel shares"],
+            ["Bottom-30% CPI & Wts", "104,760 rows", "Low-income inflation & weights"],
+            ["Retail Rice Prices", "25,704 rows", "Local rice PHP per kg"],
+            ["Wholesale GWPI", "1,296 rows", "Upstream island cost push"],
             ["Purchasing Power PPP", "12,960 rows", "Real value of 2018 peso"],
             ["National Core CPI", "1,632 rows", "Non-food price baseline"],
-            ["Bottom-30% CPI & Wts", "104,760 rows", "Low-income inflation gap"],
-            ["Wholesale GWPI", "1,296 rows", "Upstream island cost push"],
-            ["Retail Rice Prices", "25,704 rows", "Local rice PHP per kg"],
         ],
-        col_widths=[1.26, 0.82, 1.38],
+        col_widths=[1.26, 0.80, 1.40],
         font_size=7.8,
     )
 
     b.add_sub_heading("B. DuckDB SQL Transformation and Data Hygiene")
     b.add_para(
-        "Loading millions of raw CSV cells straight into Pandas slows down dashboards and wastes memory. Instead, our ETL script runs all heavy work inside DuckDB, an in-memory columnar SQL engine [2]. DuckDB unpivots the 106 monthly columns, converts PSA placeholder dots into proper nulls, and strips national and regional summary rows so only 101 clean local leaf units remain: 100 provinces and highly urbanized cities plus NCR across 18 regions, including Negros Island Region and BARMM."
+        "Pulling millions of raw CSV cells directly into Pandas slows dashboards and risks memory crashes on cloud servers. Our ETL pipeline instead executes all heavy reshaping inside DuckDB, an embeddable columnar SQL engine [2]. DuckDB unpivots 106 monthly columns, converts PSA placeholder dots into nulls, and removes national and regional rollups so exactly 101 local leaf units remain: 100 provinces and highly urbanized cities plus NCR across 18 official regions, including Negros Island Region and BARMM."
     )
 
     b.add_para(
-        "We resolved city naming mismatches between the general CPI and bottom-30% tables, normalized local basket weights to sum to 100% per province, and computed lag features using SQL window functions. Each province-month row carries 55 engineered attributes, including 1-month to 12-month inflation lags, rolling averages, lagged island wholesale growth, and retail rice changes. The cleaned master panel has 10,706 rows, with 9,494 valid year-over-year rows from January 2019 to October 2026. Missing values are transparent and bounded: 1,212 rows lack 2018 year-over-year baselines, 1,313 rows lack October 2026 wholesale lags, and 212 rows lack retail rice quotes in two island units."
+        "We reconciled city naming mismatches between general and bottom-30% CPI files, normalized local basket weights to sum to 100% per locality, and engineered 55 attributes per province-month using SQL window functions. Features cover 1-month to 12-month lags, rolling averages, retail rice growth, and prior-month island wholesale changes. The cleaned master panel holds 10,706 rows, yielding 9,494 valid year-over-year observations from January 2019 to October 2026. Missing values are documented transparently: 1,212 rows lack 2018 year-over-year baselines, 1,313 rows lack October 2026 wholesale lags, and 212 rows lack retail rice quotes in two island units."
     )
 
     b.add_para(
-        "DuckDB exports two ZSTD-compressed Parquet marts totaling just 2.2 MB: a 521 KB provincial ML panel and a 1.65 MB division table. Inside the Streamlit app, every chart queries DuckDB with SQL aggregation so strictly fewer than 1,000 rows ever reach the browser. Fig. 2 maps this five-stage workflow."
+        "DuckDB exports two ZSTD-compressed Parquet marts totaling just 2.2 MB: a 521 KB provincial ML panel and a 1.65 MB division table. Inside Streamlit, every chart runs parameterized DuckDB SQL aggregations so strictly fewer than 1,000 rows ever reach Plotly. Fig. 2 maps this five-stage workflow."
     )
 
     b.add_fullwidth_figure(
         pipe_fig,
-        "<b>Fig. 2.</b> End-to-end ETL, storage, modeling, and live serving architecture compressing 73.87 MB of raw PSA tables into 2.2 MB of Parquet marts.",
+        "<b>Fig. 2.</b> End-to-end ETL, Parquet storage, dual-household modeling, and live Streamlit serving architecture compressing 73.87 MB of raw PSA tables into 2.2 MB.",
         width_in=6.75,
     )
 
-    b.add_sub_heading("C. Chronological Forecasting and Evaluation Setup")
+    b.add_sub_heading("C. Chronological Dual-Household Forecasting Setup")
     b.add_para(
-        "Random train-test splits leak future inflation regimes into training data and create misleadingly high scores. We therefore enforce strict time order. Every machine learning model trains on January 2020 through December 2024 and predicts unseen months from January 2025 through September 2026, totaling 2,121 out-of-time provincial test observations. We also run expanding TimeSeriesSplit cross-validation inside the training window."
+        "Random train-test splits leak future inflation regimes into training data and produce inflated accuracy scores. We enforce strict chronological evaluation: every machine learning model trains on January 2020 through December 2024 and predicts unseen months from January 2025 through September 2026, covering 2,121 out-of-time provincial test rows and 2,020 paired ordinary-and-bottom-30% holdout rows. Expanding TimeSeriesSplit cross-validation tunes models strictly inside the training window."
     )
 
     b.add_para(
-        "Two prediction tasks run side by side. First, a regression task predicts next-month provincial inflation using Ridge Regression, Random Forest, and XGBoost [3], benchmarked against a naive persistence baseline and national SARIMAX [4]. Second, a classification task predicts whether a province will breach the 4.0% BSP target next month using Logistic Regression, Random Forest, and XGBoost. To show forecast risk honestly, Gradient Boosting quantile models compute 80% and 95% prediction bands alongside SARIMAX confidence intervals, and exact TreeSHAP values explain feature impact [5]."
+        "Three operational tasks run in concert. First, Ridge Regression, Random Forest, and XGBoost [3] predict next-month ordinary household inflation against naive persistence and national SARIMAX [4]. Second, a dedicated Bottom-30% Ridge model predicts next-month low-income inflation directly so councils can compare both income groups under identical shocks. Third, Logistic Regression, Random Forest, and XGBoost classify whether a province will breach the 4.0% alert ceiling next month. Quantile Gradient Boosting and SARIMAX supply 80% and 95% uncertainty bands, while TreeSHAP explains feature attribution [5]."
     )
 
     # ------------------------------------------------------------------
@@ -682,36 +682,36 @@ def main():
     # ------------------------------------------------------------------
     b.add_section_heading("III. Visualization Design Rationale and Interaction Architecture")
 
-    b.add_sub_heading("A. Layered Portfolio: Five Basic, Five Advanced, and Predictive Views")
+    b.add_sub_heading("A. Quality-Over-Quantity Portfolio: Four Connected LPCC Views")
     b.add_para(
-        "Our dashboard follows a clear three-step reading path so both executives and technical auditors can navigate it easily. Every plot uses colorblind-safe Viridis and Safe palettes, clear axis units, and interactive hover tooltips [6]."
+        "Rather than crowding one page with redundant plots, PesoPulse organizes strictly essential visuals into four connected views that match how a local price council moves from diagnosis to intervention. Every visual uses colorblind-safe Viridis and Safe palettes, hover tooltips, and a compact Glossary popover for non-technical council members [6]."
     )
 
     b.add_bullets([
-        "<b>Tab 1 Basic EDA:</b> Pairs national headline, core, bottom-30%, and rice trend lines with a pre-aggregated inflation histogram, regional median bars shaded by low-income gap, rice-to-headline scatter analysis, and a driver correlation summary. Statistical test badges display verified ANOVA and paired t-test metrics.",
-        "<b>Tab 2 Five Advanced Views:</b> Displays a 101-unit Philippine bubble map of mean inflation and breach frequency, an interactive sunburst from island to region to spending group, a Sankey transmission flow chart, a six-axis parallel coordinates plot across provinces, and a stacked streamgraph of category drivers over time.",
-        "<b>Tab 3 Forecasting and XAI:</b> Combines the out-of-time model leaderboard, a live SARIMAX fan chart with shaded 80% and 95% confidence bands, a TreeSHAP driver chart, an interactive ROC curve with live confusion matrix counts, and a cross-filtered high-error province trace.",
-        "<b>Tab 4 What-If Simulator:</b> Lets planners pick any province or city and adjust rice, utility, fuel, and wholesale shocks to see live forecast shifts and low-income impact.",
+        "<b>View 1 Household Price Exposure:</b> Delivers five essential basic charts: ordinary, bottom-30%, and rice inflation lines; a pre-aggregated distribution histogram with the 4.0% alert line and Tukey outlier fence; regional median bars shaded by low-income penalty; a provincial retail-rice scatter with OLS fit; and ordinary versus bottom-30% basket-share donuts paired with ANOVA and paired t-test cards.",
+        "<b>View 2 Provincial Hotspots and Flows:</b> Presents five distinct advanced encodings: a 101-locality bubble map of mean inflation and alert frequency, an interactive island-to-category sunburst, a cost-channel Sankey diagram, a five-axis parallel coordinates plot for compound shocks, and a category contribution stream chart.",
+        "<b>View 3 Next-Month Forecasts and Alerts:</b> Combines a compact dual-Ridge and XGBoost holdout strip, a dynamic SARIMAX fan chart with 80% and 95% bands, top-8 human-readable TreeSHAP drivers, an interactive ROC alert curve, and a cross-filtered abrupt shock inspector.",
+        "<b>View 4 LPCC Supply-Shock Simulator:</b> Provides one-click policy presets and three focused sliders for rice, electricity and LPG, and diesel fuel, generating live ordinary and bottom-30% next-month forecasts, cross-province sensitivity bars, and concrete DTI and DA advisories.",
     ])
 
     b.add_fullwidth_figure(
         FIG_DIR / "fig07_advanced_sankey_transmission.png",
-        "<b>Fig. 3.</b> Sankey flow tracing 2022 to 2026 inflation pressure from broad supply channels through household basket divisions into Luzon, Visayas, and Mindanao.",
+        "<b>Fig. 3.</b> Sankey flow tracing 2022 to 2026 cost pressure from rice, food, utility, and fuel channels through household basket divisions into Luzon, Visayas, and Mindanao.",
         width_in=6.20,
     )
 
-    b.add_sub_heading("B. Why Each Advanced Visual Fits the Story")
+    b.add_sub_heading("B. Why Each Advanced Visual Serves Local Price Councils")
     b.add_para(
-        "Each advanced chart answers a question that simple bar charts miss. The geospatial map reveals that inflation hotspots cluster in outer island provinces like Batanes, Dinagat Islands, and Mindoro rather than inside Metro Manila. The Sankey chart in Fig. 3 proves at a glance that food and non-alcoholic beverages drive 48% of recent price pressure at 2.14 percentage points, followed by housing, utilities, and transport at 28% or 1.23 percentage points. Parallel coordinates let analysts spot provinces where food, rice, and utilities spike together, while the streamgraph tracks how food dominated the 2023 surge and returned sharply alongside transport in 2026."
+        "Each advanced encoding answers an operational question that simple tables obscure. The geospatial map reveals that chronic inflation clusters in outer-island supply corridors like Batanes, Dinagat Islands, and Mindoro rather than Metro Manila. The Sankey diagram in Fig. 3 proves that food and rice drive 48% of recent price pressure at 2.14 percentage points, followed by electricity, housing utilities, and transport fuel at 28% or 1.23 percentage points. Parallel coordinates let councils brush axes interactively to find provinces hit by rice, utilities, and low-income gaps simultaneously, while the stream chart tracks how food led the 2023 surge and re-emerged alongside transport in 2026."
     )
 
-    b.add_sub_heading("C. Interactive Controls, Cross-Filtering, and SQL Transparency")
+    b.add_sub_heading("C. Connected Navigation, Cross-Filtering, and SQL Transparency")
     b.add_para(
-        "Global sidebar filters let users slice by island cluster, region, and year range, updating every KPI card and chart instantly through parameterized DuckDB SQL queries. An expandable SQL Audit Trail panel exposes the exact query running under the hood so instructors and auditors can verify the under-1,000-row aggregation rule."
+        "Global sidebar filters slice by island cluster, region, and year range, updating all KPI cards and charts instantly through parameterized DuckDB SQL. At the bottom of each view, a concise synthesis footer links directly to the next analytical stage, while a live DuckDB SQL Audit Trail expander displays every active query and exact row count so evaluators can verify the under-1,000-row rule on demand."
     )
 
     b.add_para(
-        "To connect diagnostics back to raw provincial behavior, Tab 3 includes two synchronization controls. Moving the sidebar breach threshold slider updates the live precision, recall, and confusion matrix counts on the 2025 to 2026 holdout set. Below the ROC chart, a High-Error Holdout Inspector ranks the ten largest prediction misses and lets the user pick any province to plot its observed versus predicted curve with high-error months flagged in red. Meanwhile, a forecast horizon slider dynamically retrains SARIMAX from 3 to 12 months ahead for any chosen region."
+        "View 3 connects model diagnostics directly to local council action. Adjusting the sidebar alert cutoff updates true catches, false alarms, precision, and recall live on the ROC curve. Below the ROC chart, the Abrupt Supply-Shock Misses inspector highlights holdout months where sudden shocks caused 2.0 percentage points or more of error and provides a one-click button that sends that exact province straight into the View 4 simulator."
     )
 
     # ------------------------------------------------------------------
@@ -721,22 +721,22 @@ def main():
 
     b.add_sub_heading("A. Provincial Price Gaps and Low-Income Vulnerability")
     b.add_para(
-        "Statistical tests across all 9,494 provincial observations confirm that inflation is not uniform nationwide. As illustrated in Fig. 4, monthly headline inflation differs significantly across 18 regions with one-way ANOVA F = 5.53 and p < 0.001, and island groups also diverge with F = 8.22 and p < 0.001. Region V Bicol averaged 4.39% and broke the 4.0% BSP target 53.6% of the time. MIMAROPA followed at 4.30% with 52.5% breach frequency. At the other end, NCR averaged 3.41% and breached 4.0% only 29.8% of the time. Remote provinces face the steepest averages: Batanes reached 5.25%, Dinagat Islands hit 5.07%, and Occidental Mindoro exceeded 4.0% in 64.9% of all months."
+        "Statistical tests across all 9,494 provincial observations prove that local councils cannot rely on national inflation averages. As shown in Fig. 4, monthly inflation differs significantly across all 18 regions with one-way ANOVA F = 5.53 and p < 0.001, and across island groups with F = 8.22 and p < 0.001. Region V Bicol averaged 4.39% and crossed the 4.0% alert ceiling 53.6% of the time, followed by MIMAROPA at 4.30% with 52.5% alert frequency. By contrast, NCR averaged 3.41% with only 29.8% alerts. Outer-island provinces run hottest: Batanes averaged 5.25%, Dinagat Islands reached 5.07%, and Occidental Mindoro exceeded 4.0% in 64.9% of all months."
     )
 
     b.add_para(
-        "More importantly, food inflation hurts poorer families much faster than average shoppers. Across the full period, bottom-30% households experienced 0.16 percentage points higher inflation than all-income households with paired t = 11.83 and p < 0.001. During months when food inflation exceeded 5%, that gap jumped nearly sixfold to 0.95 percentage points with paired t = 43.52. The reason is simple basket math. In City of Baguio, rice accounts for 4.50% of the general household basket, but 12.15% of the bottom-30% basket. In October 2026, when Baguio rice inflation hit 16.5%, local low-income inflation climbed to 9.5% against 9.3% overall. Upstream links also hold clearly: lagged wholesale inflation correlates at r = 0.43 with next-month provincial CPI, and local retail rice growth correlates at r = 0.45."
+        "Crucially for DTI and DA price councils, staple food spikes are sharply regressive. Across all months, bottom-30% households experienced 0.16 percentage points higher inflation than ordinary households with paired t = 11.83 and p < 0.001. When food inflation exceeded 5%, that gap jumped nearly sixfold to 0.95 percentage points with paired t = 43.52. Basket weights explain why: in City of Baguio, rice accounts for 4.50% of the ordinary basket but 12.15% of the bottom-30% basket; in Camarines Sur, rice climbs from 12.57% ordinary to 21.07% for low-income families. Upstream links also hold clearly, with local retail rice growth correlating at r = 0.45 and lagged island wholesale inflation at r = 0.43 with provincial headline CPI."
     )
 
     b.add_fullwidth_figure(
         FIG_DIR / "fig03_regional_anova_boxplot.png",
-        "<b>Fig. 4.</b> Distribution of monthly provincial headline inflation across all 18 Philippine regions from 2019 to 2026 against the 2.0% and 4.0% BSP target lines.",
+        "<b>Fig. 4.</b> Distribution of monthly provincial headline inflation across all 18 Philippine regions from 2019 to 2026 against the 2.0% and 4.0% national price-stability lines.",
         width_in=6.30,
     )
 
-    b.add_sub_heading("B. Honest Model Benchmarks and Why Linear Shrinkage Wins")
+    b.add_sub_heading("B. Honest Model Benchmarks and Dual-Household Accuracy")
     b.add_para(
-        "Table II summarizes out-of-time accuracy across the turbulent 2025 to 2026 holdout period. For next-month numerical inflation, Ridge Regression achieves the lowest error at 0.93 percentage points MAE and R² of 0.874, outperforming Random Forest at 1.05, XGBoost at 1.16, and national SARIMAX at 2.20. Tree ensembles scored slightly better inside 2020 to 2024 cross-validation, yet struggled out of time because 2025 dropped to 0.9% before 2026 surged back to 7.8%. Tree leaves clip near past training ranges, whereas Ridge extrapolates smoothly across turning points. For the same reason, quantile 80% and 95% bands in Fig. 5 achieved 62.9% and 75.5% empirical coverage during the rapid 2026 jump, highlighting why fan charts must communicate widening risk clearly."
+        "Table II reports blind 2025 to 2026 holdout performance. For next-month ordinary inflation, Ridge Regression leads at 0.93 percentage points MAE and R² of 0.874, beating Random Forest at 1.05, XGBoost at 1.16, and national SARIMAX at 2.20. Our dedicated Bottom-30% Ridge model achieves 1.14 percentage points MAE and R² of 0.874 across 2,020 paired low-income holdout observations despite higher food volatility. Tree ensembles scored slightly better inside 2020 to 2024 cross-validation yet struggled out of time because tree leaves clip near past training bounds when inflation swings from 0.9% to 7.8%, whereas linear shrinkage extrapolates smoothly. For the same reason, quantile 80% and 95% bands in Fig. 5 reached 62.9% and 75.5% empirical coverage during the rapid 2026 rebound, reinforcing why uncertainty bands are essential."
     )
 
     b.add_table(
@@ -744,25 +744,26 @@ def main():
         title="Out-of-Time 2025 to 2026 Holdout Model Benchmarks",
         headers=["Model and Task", "MAE / Acc", "RMSE / F1", "R² / AUC"],
         rows=[
-            ("BANNER", "Next-Month YoY Regression"),
-            ["<b>Ridge Regression</b>", "<b>0.93 pp</b>", "<b>1.30 pp</b>", "<b>0.874</b>"],
+            ("BANNER", "Next-Month Household YoY Regression"),
+            ["<b>Ordinary Ridge Regression</b>", "<b>0.93 pp</b>", "<b>1.30 pp</b>", "<b>0.874</b>"],
+            ["<b>Bottom-30% Ridge Regression</b>", "<b>1.14 pp</b>", "<b>1.62 pp</b>", "<b>0.874</b>"],
             ["Persistence Baseline", "0.93 pp", "1.34 pp", "0.867"],
             ["Random Forest Regressor", "1.05 pp", "1.42 pp", "0.849"],
             ["XGBoost Regressor", "1.16 pp", "1.54 pp", "0.824"],
             ["National SARIMAX", "2.20 pp", "2.56 pp", "N/A"],
-            ("BANNER", "BSP >4.0% Breach Classification"),
+            ("BANNER", ">4.0% Price-Alert Classification"),
             ["<b>XGBoost Classifier</b>", "<b>92.6%</b>", "<b>0.897</b>", "<b>0.976</b>"],
             ["Logistic Regression", "92.4%", "0.893", "0.980"],
             ["Random Forest Classifier", "92.3%", "0.892", "0.965"],
         ],
-        col_widths=[1.54, 0.64, 0.64, 0.64],
+        col_widths=[1.56, 0.63, 0.63, 0.64],
         right_cols={1, 2, 3},
-        font_size=7.7,
+        font_size=7.6,
         keep_together=True,
     )
 
     b.add_para(
-        "We also report an honest forecasting insight shown in Fig. 6. Because year-over-year inflation overlaps eleven of twelve months with the previous month, current headline inflation dominates TreeSHAP at 2.50 percentage points mean impact, followed by three-month momentum, core inflation, seasonality, wholesale lag, and fuel costs. As a result, Ridge beats naive persistence only narrowly on one-month point error. The real decision value therefore lies in three operational outputs: the 92.6% accurate early-warning breach classifier with 0.976 ROC-AUC, the 6-month SARIMAX outlook projecting national inflation near 8.0% through February 2027 before easing toward 3.4% by April 2027, and the basket-weighted shock simulator."
+        "Fig. 6 highlights an honest forecasting boundary. Because year-over-year inflation overlaps eleven of twelve months with the prior month, current headline inflation leads TreeSHAP attribution at 2.50 percentage points mean impact, followed by three-month momentum, core baseline, seasonal harvest cycles, wholesale lag, and diesel fuel. Ridge therefore improves only narrowly over naive persistence on quiet months. The operational edge for local price councils comes from combining three live tools: the 92.6% accurate early-alert classifier at 0.976 ROC-AUC, the multi-month SARIMAX fan chart, and the dual-household supply-shock simulator."
     )
 
     b.add_fullwidth_figure(
@@ -773,38 +774,37 @@ def main():
 
     b.add_fullwidth_figure(
         FIG_DIR / "fig12_xai_treeshap_and_roc_breach.png",
-        "<b>Fig. 6.</b> Left: Exact TreeSHAP drivers for next-month provincial inflation. Right: Holdout ROC curves for provincial breaches above the 4.0% BSP target.",
+        "<b>Fig. 6.</b> Left: Exact TreeSHAP feature attribution for next-month provincial inflation. Right: Holdout ROC curves for flagging provincial breaches above the 4.0% alert ceiling.",
         width_in=6.45,
     )
 
-    b.add_sub_heading("C. Live Supply-Shock Simulation and Agency Action Plan")
+    b.add_sub_heading("C. Live Supply-Shock Simulation and LPCC Action Plan")
     b.add_para(
-        "Table III shows how the live Tab 4 simulator responds when we inject the exact same supply shock starting from October 2026 data: +8.0 percentage points in rice, +5.0 in electricity and LPG, +6.0 in diesel and transport fuel, and +3.0 in wholesale spillover. Even with identical shock inputs, Camarines Sur absorbs nearly double the direct basket impact of Baguio City because rice carries a 12.57% share in Camarines Sur versus 4.50% in Baguio. Meanwhile, Baguio low-income families absorb an extra 0.61 percentage points from rice alone compared with general Baguio households, proving that a single national relief formula misses local needs."
+        "Table III shows how the live View 4 simulator responds to an identical supply shock starting from October 2026 readings: +8.0 percentage points in rice, +5.0 in electricity and LPG, and +6.0 in diesel fuel. Because rice carries 12.57% of the ordinary basket and 21.07% of the bottom-30% basket in Camarines Sur compared with 4.50% and 12.15% in City of Baguio, Camarines Sur absorbs nearly double the direct basket shift at +1.45 percentage points ordinary and +2.13 percentage points for low-income families. Under the same shock, Camarines Sur bottom-30% inflation reaches 13.28% next month against 10.24% in Baguio, proving why one national relief formula fails local communities."
     )
 
     b.add_table(
         label="TABLE III",
-        title="Simulated Nov 2026 Shock: +8pp Rice, +5pp Util, +6pp Fuel, +3pp GWPI",
-        headers=["Area", "Oct Obs", "Base", "Shock", "Direct", "B30 Extra"],
+        title="Simulated Nov 2026 Shock: +8pp Rice, +5pp Power/LPG, +6pp Diesel",
+        headers=["Locality", "Ord Base", "Ord Shock", "B30 Shock", "Ord Hit", "B30 Hit"],
         rows=[
-            ["City of Baguio", "9.30%", "8.95%", "9.62%", "+0.77 pp", "+0.61 pp"],
-            ["Camarines Sur", "10.10%", "9.70%", "10.93%", "+1.45 pp", "+0.68 pp"],
-            ["NCR", "5.90%", "6.05%", "6.80%", "+0.87 pp", "+0.41 pp"],
+            ["City of Baguio", "8.95%", "9.63%", "10.24%", "+0.77 pp", "+1.38 pp"],
+            ["Camarines Sur", "9.70%", "10.94%", "13.28%", "+1.45 pp", "+2.13 pp"],
         ],
-        col_widths=[1.02, 0.48, 0.45, 0.48, 0.51, 0.52],
+        col_widths=[0.96, 0.50, 0.52, 0.52, 0.48, 0.48],
         right_cols={1, 2, 3, 4, 5},
         font_size=7.6,
         keep_together=True,
     )
 
     b.add_para(
-        "These empirical patterns translate into three straightforward policy actions for government stakeholders:"
+        "These findings support three immediate operational protocols for DTI and DA Local Price Coordinating Councils:"
     )
 
     b.add_bullets([
-        "<b>Targeted Rice and Food Relief for DA and DTI:</b> Prioritize rice buffer deployment and Kadiwa rolling stores in high-weight, high-breach provinces such as Bicol, MIMAROPA, and island areas whenever local retail rice inflation crosses 8% rather than waiting for national averages to spike.",
-        "<b>Regional Early-Warning Thresholds for BSP:</b> Use the tunable breach classifier in Tab 3 to trigger regional monitoring alerts when predicted probability crosses 0.45, capturing 85.6% of upcoming provincial target breaches with 94.2% precision.",
-        "<b>Low-Income Cost Protection for NEDA and LGUs:</b> Anchor local wage reviews and targeted household subsidies to bottom-30% CPI baskets during food surges, since low-income urban families in cities like Baguio face nearly triple the rice weight of all-income indices.",
+        "<b>Weight-Prioritized Kadiwa and NFA Buffer Deployment:</b> Dispatch Kadiwa rolling stores and NFA buffer rice first to high-rice-weight, high-alert provinces such as Bicol, MIMAROPA, and outer islands whenever local retail rice inflation crosses 8% rather than waiting for national averages to climb.",
+        "<b>Proactive Monthly LPCC Alert Triggers:</b> Convene emergency council SRP inspections whenever the View 3 breach probability exceeds 0.45, capturing 85.6% of upcoming provincial surges above 4.0% at 94.2% precision.",
+        "<b>Bottom-30% Anchored Relief Sizing:</b> Calibrate municipal food vouchers and public transport subsidies using the View 4 bottom-30% Ridge forecast rather than ordinary CPI, since low-income urban families in cities like Baguio face nearly triple the rice budget exposure of average shoppers.",
     ])
 
     # ------------------------------------------------------------------
@@ -813,15 +813,15 @@ def main():
     b.add_section_heading("V. Conclusion and Limitations")
 
     b.add_para(
-        "PesoPulse demonstrates how open Philippine government statistics can move from static spreadsheets into a fast, transparent decision-support tool. By processing 4.5 million PSA price cells inside DuckDB and serving compact Parquet marts through Streamlit, our platform delivers five basic views, five advanced visual encodings, honest out-of-time forecasts, explainable drivers, and real-time supply-shock simulation at minimal compute cost."
+        "PesoPulse turns 4.5 million raw Philippine Statistics Authority price cells into a focused, transparent decision-support platform for DTI and Department of Agriculture Local Price Coordinating Councils. By running columnar SQL inside DuckDB and serving 2.2 MB of Parquet marts through Streamlit, the system delivers five essential basic views, five advanced visual encodings, dual ordinary and bottom-30% next-month forecasts, explainable drivers, and real-time rice, electricity, and diesel shock simulation."
     )
 
     b.add_para(
-        "Two practical limitations guide future upgrades. First, PSA OpenSTAT does not publish province-level monthly rainfall, typhoon disruption logs, or port freight rates, which explain sudden spikes in island provinces like Batanes and Mindoro. Second, one-month year-over-year CPI moves closely with recent history, so future work should add month-on-month food price forecasting and direct PAGASA weather feeds to extend early warning from one month to a full quarter."
+        "Two practical limitations define clear next steps. First, PSA OpenSTAT does not publish province-level monthly rainfall, typhoon track logs, or inter-island port freight rates, which trigger sudden single-month jumps in island markets like Batanes and Mindoro. Second, year-over-year CPI moves closely with prior-year base effects, so integrating month-on-month retail food feeds from DA Bantay Presyo alongside PAGASA weather advisories would extend early warning from one month to a full quarter."
     )
 
     b.add_para(
-        "The full codebase, reproducible DuckDB scripts, compact Parquet marts, and Streamlit application are maintained under version control with distributed commits across all three team members covering data engineering, visual analytics, and predictive deployment. Because the runtime files weigh only 2.2 MB, the platform deploys cleanly to Streamlit Community Cloud without external database servers."
+        "The full codebase, reproducible DuckDB ETL scripts, compact Parquet marts, and Streamlit application are maintained on GitHub under version control for distributed team contributions and direct deployment to Streamlit Community Cloud without external database servers."
     )
 
     # ------------------------------------------------------------------
