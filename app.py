@@ -1,8 +1,8 @@
 """
 PesoPulse: MIT 118 Final Group Project (Team 3)
-Philippine Provincial Inflation Analytics, Forecasting & Supply-Shock Simulator
-Data: PSA OpenSTAT 2M (8 Joined Tables across 101 Provinces and HUCs, Jan 2018 to Oct 2026)
-Engine: DuckDB SQL + Plotly + Ridge / XGBoost / Quantile GBR / SARIMAX
+Local Price Coordinating Council (DTI & DA) Supply-Shock & Inflation Intelligence
+Data: PSA OpenSTAT 2M (8 Joined Tables across 101 Provinces & HUCs, Jan 2018 to Oct 2026)
+Engine: DuckDB SQL + Plotly + Ridge (All-Income & Bottom-30%) / XGBoost / Quantile GBR / SARIMAX
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
-from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
+from sklearn.metrics import confusion_matrix, mean_absolute_error, r2_score, roc_auc_score, roc_curve
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -29,7 +29,7 @@ import streamlit.components.v1 as components
 import xgboost as xgb
 
 st.set_page_config(
-    page_title="PesoPulse | Philippine Provincial Inflation & Policy Intelligence",
+    page_title="PesoPulse | Philippine Provincial Inflation Monitor",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -44,16 +44,23 @@ SUMMARY_JSON = DATA_DIR / "analytics_summary.json"
 SHAP_CSV = DATA_DIR / "treeshap_feature_importance.csv"
 
 SECTIONS = [
-    "1. National vs. Local Reality",
+    "1. Household Price Exposure",
     "2. Provincial Hotspots & Flows",
-    "3. Forecasts & Breach Risk",
-    "4. Supply-Shock Simulator",
+    "3. Next-Month Forecasts & Alerts",
+    "4. LPCC Supply-Shock Simulator",
+]
+
+SECTION_PURPOSES = [
+    "Establishes how inflation swings across time, regions, and ordinary versus Bottom-30% household budgets.",
+    "Locates chronic high-breach provinces and traces how food, power, and fuel transmit into local baskets.",
+    "Validates blind 2025–2026 forecasts, calibrates early >4.0% price alerts, and isolates sudden shock misses.",
+    "Simulates how rice, electricity, and diesel shocks shift next-month ordinary and Bottom-30% inflation.",
 ]
 
 FEATURE_LABELS = {
     "headline_yoy_pct": "Current Headline Inflation (%)",
     "yoy_roll3_mean": "3-Month Inflation Momentum (%)",
-    "natl_core_yoy_pct": "National Core Inflation (%)",
+    "natl_core_yoy_pct": "National Core Baseline (%)",
     "month_sin": "Seasonal Harvest Cycle (Sine)",
     "month_cos": "Seasonal Harvest Cycle (Cosine)",
     "gwpi_all_yoy_lag1": "Prior-Month Wholesale Index (GWPI %)",
@@ -86,8 +93,7 @@ FEATURE_LABELS = {
 def humanize_feature(raw_name: str) -> str:
     if raw_name in FEATURE_LABELS:
         return FEATURE_LABELS[raw_name]
-    cleaned = raw_name.replace("cat__", "").replace("num__", "").replace("_", " ")
-    return cleaned.title()
+    return raw_name.replace("cat__", "").replace("num__", "").replace("_", " ").title()
 
 
 @st.cache_resource
@@ -109,12 +115,15 @@ def train_interactive_models():
         SELECT * FROM prov_panel
         WHERE headline_yoy_pct IS NOT NULL
           AND target_yoy_t1 IS NOT NULL
+          AND b30_headline_yoy_pct IS NOT NULL
           AND yoy_lag1 IS NOT NULL
           AND yoy_lag3 IS NOT NULL
           AND yoy_lag12 IS NOT NULL
-        ORDER BY obs_date, clean_geo
+        ORDER BY clean_geo, obs_date
     """).df()
     df["obs_date"] = pd.to_datetime(df["obs_date"])
+    df["target_b30_t1"] = df.groupby("clean_geo")["b30_headline_yoy_pct"].shift(-1)
+    df = df.dropna(subset=["target_b30_t1"]).sort_values(["obs_date", "clean_geo"]).reset_index(drop=True)
 
     num_feats = [
         "month_sin", "month_cos", "latitude", "longitude",
@@ -132,25 +141,22 @@ def train_interactive_models():
     cat_feats = ["parent_region", "island_group"]
     X = df[num_feats + cat_feats].copy()
     y_reg = df["target_yoy_t1"].values
+    y_b30 = df["target_b30_t1"].values
     y_clf = df["target_breach_4pct_t1"].astype(int).values
 
     tr_mask = df["year"] <= 2024
     te_mask = df["year"] >= 2025
 
-    pre = ColumnTransformer([
-        ("num", Pipeline([("imp", SimpleImputer(strategy="median")), ("sc", StandardScaler())]), num_feats),
-        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), cat_feats),
-    ])
-    ridge = Pipeline([("pre", pre), ("m", Ridge(alpha=10.0))])
-    reg = Pipeline([
-        ("pre", pre),
-        ("m", xgb.XGBRegressor(
-            n_estimators=220, max_depth=5, learning_rate=0.05,
-            subsample=0.85, colsample_bytree=0.85, random_state=42, n_jobs=-1,
-        )),
-    ])
+    def make_pre():
+        return ColumnTransformer([
+            ("num", Pipeline([("imp", SimpleImputer(strategy="median")), ("sc", StandardScaler())]), num_feats),
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), cat_feats),
+        ])
+
+    ridge = Pipeline([("pre", make_pre()), ("m", Ridge(alpha=10.0))])
+    b30_ridge = Pipeline([("pre", make_pre()), ("m", Ridge(alpha=10.0))])
     clf = Pipeline([
-        ("pre", pre),
+        ("pre", make_pre()),
         ("m", xgb.XGBClassifier(
             n_estimators=200, max_depth=4, learning_rate=0.05,
             random_state=42, eval_metric="logloss", n_jobs=-1,
@@ -158,10 +164,10 @@ def train_interactive_models():
     ])
 
     ridge.fit(X[tr_mask], y_reg[tr_mask])
-    reg.fit(X[tr_mask], y_reg[tr_mask])
+    b30_ridge.fit(X[tr_mask], y_b30[tr_mask])
     clf.fit(X[tr_mask], y_clf[tr_mask])
 
-    X_tr_enc = reg.named_steps["pre"].transform(X[tr_mask])
+    X_tr_enc = ridge.named_steps["pre"].transform(X[tr_mask])
     q10 = GradientBoostingRegressor(
         loss="quantile", alpha=0.10, n_estimators=120, max_depth=4, learning_rate=0.06, random_state=42
     ).fit(X_tr_enc, y_reg[tr_mask])
@@ -169,21 +175,31 @@ def train_interactive_models():
         loss="quantile", alpha=0.90, n_estimators=120, max_depth=4, learning_rate=0.06, random_state=42
     ).fit(X_tr_enc, y_reg[tr_mask])
 
-    probs_te = clf.predict_proba(X[te_mask])[:, 1]
     preds_te = ridge.predict(X[te_mask])
+    b30_preds_te = b30_ridge.predict(X[te_mask])
+    probs_te = clf.predict_proba(X[te_mask])[:, 1]
+
     return {
         "df": df,
         "num_feats": num_feats,
         "cat_feats": cat_feats,
         "ridge": ridge,
-        "reg": reg,
+        "b30_ridge": b30_ridge,
         "clf": clf,
         "q10": q10,
         "q90": q90,
         "y_te_reg": y_reg[te_mask],
         "preds_te": preds_te,
+        "y_te_b30": y_b30[te_mask],
+        "b30_preds_te": b30_preds_te,
         "y_te_clf": y_clf[te_mask],
         "probs_te": probs_te,
+        "ridge_mae": float(mean_absolute_error(y_reg[te_mask], preds_te)),
+        "ridge_r2": float(r2_score(y_reg[te_mask], preds_te)),
+        "b30_mae": float(mean_absolute_error(y_b30[te_mask], b30_preds_te)),
+        "b30_r2": float(r2_score(y_b30[te_mask], b30_preds_te)),
+        "clf_auc": float(roc_auc_score(y_clf[te_mask], probs_te)),
+        "clf_acc": float(((probs_te >= 0.5).astype(int) == y_clf[te_mask]).mean()),
         "te_meta": df.loc[
             te_mask,
             ["clean_geo", "parent_region", "island_group", "obs_date", "headline_yoy_pct", "target_yoy_t1"],
@@ -199,10 +215,11 @@ def init_state(regs_all: list[str]):
         "sim_rice": 8.0,
         "sim_util": 5.0,
         "sim_fuel": 6.0,
-        "sim_gwpi": 3.0,
         "flt_islands": ["Luzon", "Visayas", "Mindanao"],
         "flt_regs": regs_all,
         "flt_years": (2019, 2026),
+        "fc_horizon": 6,
+        "alert_tau": 0.45,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -217,11 +234,10 @@ def go_to_section(idx: int, target_prov: str | None = None):
         st.session_state["sim_prov"] = target_prov
 
 
-def apply_shock_preset(rice: float, util: float, fuel: float, gwpi: float):
+def apply_shock_preset(rice: float, util: float, fuel: float):
     st.session_state["sim_rice"] = rice
     st.session_state["sim_util"] = util
     st.session_state["sim_fuel"] = fuel
-    st.session_state["sim_gwpi"] = gwpi
 
 
 def reset_global_filters(regs_all: list[str]):
@@ -237,7 +253,6 @@ def compute_province_shock(
     rice_shock: float,
     util_shock: float,
     fuel_shock: float,
-    gwpi_shock: float,
 ) -> dict:
     safe_prov = prov_name.replace("'", "''")
     prov_hist = con.execute(f"""
@@ -256,27 +271,30 @@ def compute_province_shock(
     w_util = float(latest_row["elec_gas_fuel_weight"].iloc[0] or 4.5) / 100.0
     w_fuel = float(latest_row["personal_fuel_weight"].iloc[0] or 2.5) / 100.0
     w_food = max(float(latest_row["food_bev_weight"].iloc[0] or 38.0) / 100.0, 0.1)
+    b30_rice_w = float(latest_row["b30_rice_weight"].iloc[0] or (w_rice * 180.0)) / 100.0
 
     direct_acct_pp = w_rice * rice_shock + w_util * util_shock + w_fuel * fuel_shock
+    b30_extra_pp = (b30_rice_w - w_rice) * rice_shock
+    b30_direct_pp = direct_acct_pp + b30_extra_pp
+
     X_sim["rice_cpi_yoy_pct"] = X_sim["rice_cpi_yoy_pct"].fillna(0) + rice_shock
     X_sim["food_bev_yoy_pct"] = X_sim["food_bev_yoy_pct"].fillna(0) + rice_shock * (w_rice / w_food)
     X_sim["elec_gas_fuel_yoy_pct"] = X_sim["elec_gas_fuel_yoy_pct"].fillna(0) + util_shock
     X_sim["personal_fuel_yoy_pct"] = X_sim["personal_fuel_yoy_pct"].fillna(0) + fuel_shock
     X_sim["transport_yoy_pct"] = X_sim["transport_yoy_pct"].fillna(0) + fuel_shock * 0.45
-    X_sim["gwpi_all_yoy_lag1"] = X_sim["gwpi_all_yoy_lag1"].fillna(0) + gwpi_shock
     X_sim["headline_yoy_pct"] = X_sim["headline_yoy_pct"].fillna(0) + direct_acct_pp
+    X_sim["b30_inflation_spread_pp"] = X_sim["b30_inflation_spread_pp"].fillna(0) + b30_extra_pp
 
     base_pred = float(eng["ridge"].predict(X_base)[0])
     sim_pred = float(eng["ridge"].predict(X_sim)[0])
-    xgb_sim_pred = float(eng["reg"].predict(X_sim)[0])
-    X_sim_enc = eng["reg"].named_steps["pre"].transform(X_sim)
+    b30_base_pred = float(eng["b30_ridge"].predict(X_base)[0])
+    b30_sim_pred = float(eng["b30_ridge"].predict(X_sim)[0])
+
+    X_sim_enc = eng["ridge"].named_steps["pre"].transform(X_sim)
     sim_q10 = float(eng["q10"].predict(X_sim_enc)[0])
     sim_q90 = float(eng["q90"].predict(X_sim_enc)[0])
     base_prob = float(eng["clf"].predict_proba(X_base)[0, 1])
     sim_prob = float(eng["clf"].predict_proba(X_sim)[0, 1])
-
-    b30_rice_w = float(latest_row["b30_rice_weight"].iloc[0] or (w_rice * 180.0)) / 100.0
-    b30_extra_pp = (b30_rice_w - w_rice) * rice_shock
 
     return {
         "prov_hist": prov_hist,
@@ -285,9 +303,11 @@ def compute_province_shock(
         "b30_rice_w_pct": b30_rice_w * 100.0,
         "direct_acct_pp": direct_acct_pp,
         "b30_extra_pp": b30_extra_pp,
+        "b30_direct_pp": b30_direct_pp,
         "base_pred": base_pred,
         "sim_pred": sim_pred,
-        "xgb_sim_pred": xgb_sim_pred,
+        "b30_base_pred": b30_base_pred,
+        "b30_sim_pred": b30_sim_pred,
         "sim_q10": sim_q10,
         "sim_q90": sim_q90,
         "base_prob": base_prob,
@@ -306,8 +326,8 @@ def render_section_footer(
 ):
     st.markdown("")
     with st.container(border=True):
-        st.caption(summary_line)
-        b_left, b_spacer, b_right = st.columns([1.15, 1.3, 1.55])
+        st.markdown(summary_line)
+        b_left, b_spacer, b_right = st.columns([1.2, 1.2, 1.6])
         with b_left:
             if prev_idx is not None and prev_label:
                 st.button(
@@ -351,60 +371,46 @@ def main():
         st.session_state["scroll_to_top"] = False
 
     # ------------------------------------------------------------------
-    # Sidebar: Scope Filters & Forecast Parameters
+    # Sidebar: Global Scope Filters Only
     # ------------------------------------------------------------------
-    st.sidebar.header("Scope & Filters")
-    st.sidebar.caption("Filter by geography or period. All metrics and charts query DuckDB live.")
+    st.sidebar.header("Monitoring Scope")
+    st.sidebar.caption(
+        "Narrow the geographic or time scope below. Every summary metric and visualization updates live through DuckDB."
+    )
 
     islands = ["Luzon", "Visayas", "Mindanao"]
     sel_islands = st.sidebar.multiselect(
         "Island Cluster",
         islands,
         key="flt_islands",
-        help="Filter provinces and cities across Luzon, Visayas, and Mindanao.",
+        help="Filter provincial monitoring across Luzon, Visayas, and Mindanao.",
     )
     sel_regs = st.sidebar.multiselect(
         "Regions",
         regs_all,
         key="flt_regs",
-        help="Include or isolate any of the 18 official administrative regions, including NIR and BARMM.",
+        help="Include or isolate any of the 18 official PSA administrative regions.",
     )
     yr_range = st.sidebar.slider(
         "Observation Years",
         2019,
         2026,
         key="flt_years",
-        help="Year-on-year inflation spans Jan 2019 through Oct 2026 against the 2018=100 PSA base basket.",
+        help="Monthly year-on-year inflation from Jan 2019 through Oct 2026 against the 2018=100 base basket.",
     )
 
     if len(sel_islands) < 3 or len(sel_regs) < len(regs_all) or yr_range != (2019, 2026):
         st.sidebar.button(
-            "Reset Filters",
+            "Reset Scope Filters",
             on_click=reset_global_filters,
             args=(regs_all,),
             width="stretch",
         )
 
     st.sidebar.divider()
-    st.sidebar.subheader("Forecast Parameters")
-    tau = st.sidebar.slider(
-        "BSP >4.0% Alert Threshold (τ)",
-        0.15,
-        0.85,
-        0.45,
-        0.02,
-        help=(
-            "Probability cutoff for flagging an inflation breach in Forecasts & Breach Risk. "
-            "Lower cutoffs catch more breaches early at the cost of extra false alarms."
-        ),
-    )
-    horizon_mo = st.sidebar.slider(
-        "SARIMAX Horizon (Months)",
-        3,
-        12,
-        6,
-        1,
-        help="Forward projection window for the regional SARIMAX fan chart.",
+    st.sidebar.caption(
+        "**Data Source:** 8 verified PSA OpenSTAT tables covering 101 provinces and highly urbanized cities "
+        "from Jan 2018 to Oct 2026, served from 2.2 MB ZSTD Parquet marts."
     )
 
     isl_sql = ", ".join([f"'{x}'" for x in (sel_islands or islands)])
@@ -417,40 +423,7 @@ def main():
     )
 
     # ------------------------------------------------------------------
-    # Header & Glossary
-    # ------------------------------------------------------------------
-    h_left, h_right = st.columns([3.4, 1.0])
-    with h_left:
-        st.title("PesoPulse: Provincial Inflation & Policy Intelligence")
-        st.markdown(
-            "National inflation headlines mask sharp local price gaps across the Philippines. "
-            "Examine how prices diverge across `101` provinces and cities, why staple food surges hit "
-            "low-income households hardest, where target breaches are building, and how supply shocks "
-            "pass through local baskets."
-        )
-    with h_right:
-        st.markdown("")
-        with st.popover("Glossary", width="stretch"):
-            st.markdown(
-                """
-                **Key Indicators & Methods**
-                - **CPI (`2018=100`):** Consumer Price Index measuring the cost of a fixed household basket relative to 2018.
-                - **YoY Inflation (`%`):** Price change compared with the same month one year earlier.
-                - **Percentage Points (`pp`):** Direct arithmetic difference between two rates, such as `4.0%` to `5.5%` (`+1.5 pp`).
-                - **BSP `2.0%`–`4.0%` Target:** Bangko Sentral ng Pilipinas price-stability band; readings above `4.0%` breach the upper ceiling.
-                - **Bottom-30% Households:** Lowest-income `30%` of families, whose budgets allocate far more to rice and food.
-                - **Purchasing Power (`PPP`):** Real value of a `2018` peso today; `₱0.72` means `28` centavos of value was lost.
-                - **GWPI:** General Wholesale Price Index tracking upstream bulk prices before retail pass-through.
-                - **TreeSHAP & Fan Charts:** Feature-level forecast attribution paired with `80%` and `95%` prediction intervals.
-                """
-            )
-        st.caption(
-            f"`{len(sel_islands or islands)}` island groups · "
-            f"`{len(sel_regs or regs_all)}` regions · `{yr_range[0]}–{yr_range[1]}`"
-        )
-
-    # ------------------------------------------------------------------
-    # Top KPI Strip
+    # Top KPI Query + Header & Glossary
     # ------------------------------------------------------------------
     kpi_sql = f"""
         SELECT
@@ -458,54 +431,78 @@ def main():
             COUNT(DISTINCT clean_geo) AS n_geos,
             ROUND(AVG(headline_yoy_pct), 2) AS mean_yoy,
             ROUND(AVG(b30_headline_yoy_pct), 2) AS mean_b30,
-            ROUND(AVG(is_breach_bsp_4pct) * 100.0, 1) AS breach_pct,
-            ROUND(AVG(ppp_index), 2) AS mean_ppp
+            ROUND(AVG(is_breach_bsp_4pct) * 100.0, 1) AS breach_pct
         FROM prov_panel {where_sql}
     """
     kpi = con.execute(kpi_sql).df().iloc[0]
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    h_left, h_right = st.columns([3.5, 1.0])
+    with h_left:
+        st.title("PesoPulse: Philippine Provincial Inflation Monitor")
+        st.markdown(
+            "Track how inflation diverges across **`101` provinces and cities** and estimate how sudden jumps in "
+            "**rice, electricity, and diesel** hit ordinary and **Bottom-30% low-income households** next month, "
+            "supporting DTI and Department of Agriculture Local Price Coordinating Councils."
+        )
+    with h_right:
+        st.markdown("")
+        with st.popover("Glossary", width="stretch"):
+            st.markdown(
+                """
+                **Key Indicators**
+                - **LPCC:** Local Price Coordinating Council under DTI, DA, and LGUs monitoring retail staples and SRP compliance.
+                - **CPI (`2018=100`) & YoY (`%`):** Consumer Price Index and percentage price change versus the same month one year earlier.
+                - **Percentage Points (`pp`):** Direct arithmetic difference between two inflation rates.
+                - **Bottom-30% Households:** Lowest-income `30%` of families, whose budgets allocate a much larger share to rice and basic food.
+                - **`4.0%` Price-Alert Line:** Official national upper inflation benchmark used as a council intervention trigger.
+                - **Fan Charts & TreeSHAP:** `80%` and `95%` prediction intervals paired with feature-level forecast attribution.
+                """
+            )
+        st.caption(f"`{int(kpi['n_geos'])}` localities · `{int(kpi['n_obs']):,}` records · `{yr_range[0]}–{yr_range[1]}`")
+
+    # ------------------------------------------------------------------
+    # Streamlined 3-KPI Strip (With Practical Number Meaning)
+    # ------------------------------------------------------------------
+    mean_yoy_f = float(kpi["mean_yoy"])
+    mean_b30_f = float(kpi["mean_b30"])
+    b30_gap_f = mean_b30_f - mean_yoy_f
+    c1, c2, c3 = st.columns(3)
     c1.metric(
-        "Subnational Observations",
-        f"{int(kpi['n_obs']):,}",
-        f"{int(kpi['n_geos'])} Provinces & HUCs",
-        border=True,
-        help="Monthly observations across 100 provinces/highly urbanized cities plus NCR after stripping aggregate summary rows.",
-    )
-    c2.metric(
-        "Mean Headline Inflation",
-        f"{kpi['mean_yoy']:.2f}%",
-        "All-Income Basket",
-        border=True,
-        help="Average year-on-year CPI (2018=100) inflation across the active geographic and time selection.",
-    )
-    c3.metric(
-        "Bottom-30% Inflation",
-        f"{kpi['mean_b30']:.2f}%",
-        f"{(kpi['mean_b30'] - kpi['mean_yoy']):+.2f} pp vs General",
-        delta_color="inverse",
-        border=True,
-        help="Average inflation faced by the lowest-income 30% of households relative to the all-income basket.",
-    )
-    c4.metric(
-        ">4.0% Target Breaches",
-        f"{kpi['breach_pct']:.1f}%",
-        "Months Above BSP Ceiling",
+        "Ordinary Household Inflation",
+        f"{mean_yoy_f:.2f}%",
+        f"₱1,000 basket → ₱{1000 * (1 + mean_yoy_f / 100):.0f}/yr",
         delta_color="off",
         border=True,
-        help="Share of province-months where local headline inflation exceeded the 4.0% BSP upper target.",
+        help=(
+            f"Average year-on-year CPI inflation for all-income households. At {mean_yoy_f:.2f}%, a ₱1,000 monthly "
+            f"basket from one year earlier costs roughly ₱{1000 * (1 + mean_yoy_f / 100):.0f} today."
+        ),
     )
-    c5.metric(
-        "Real Value of ₱1.00 (2018)",
-        f"₱{kpi['mean_ppp']:.2f}",
-        f"-₱{(1.0 - float(kpi['mean_ppp'])):.2f} eroded",
+    c2.metric(
+        "Bottom-30% Household Inflation",
+        f"{mean_b30_f:.2f}%",
+        f"{b30_gap_f:+.2f} pp vs Ordinary",
         delta_color="inverse",
         border=True,
-        help="Purchasing Power of the Peso (2018=1.00), measuring how much 2018 purchasing value remains.",
+        help=(
+            f"Average inflation for the lowest-income 30% of families. A {b30_gap_f:+.2f} percentage-point gap means "
+            "poorer families face faster price increases than general shoppers because rice takes more of their budget."
+        ),
+    )
+    c3.metric(
+        ">4.0% Alert Frequency",
+        f"{kpi['breach_pct']:.1f}%",
+        "Months Above 4% Ceiling",
+        delta_color="off",
+        border=True,
+        help=(
+            f"{kpi['breach_pct']:.1f}% of all province-months crossed the 4.0% official upper price-stability line, "
+            "signaling periods where local price councils must intensify retail monitoring."
+        ),
     )
 
     # ------------------------------------------------------------------
-    # Section Navigation Bar
+    # Connected 4-Section Navigation Bar
     # ------------------------------------------------------------------
     active_idx = st.session_state["chapter_idx"]
     nav_cols = st.columns(len(SECTIONS))
@@ -517,61 +514,75 @@ def main():
                 type="primary" if i == active_idx else "secondary",
                 on_click=go_to_section,
                 args=(i,),
+                help=SECTION_PURPOSES[i],
                 width="stretch",
             )
 
-    audit_queries: list[tuple[str, int, str]] = [("Global KPI Aggregation", 1, kpi_sql)]
+    audit_queries: list[tuple[str, int, str]] = [("LPCC KPI Summary", 1, kpi_sql)]
 
     # ==================================================================
-    # SECTION 1: NATIONAL VS. LOCAL REALITY
+    # SECTION 1: HOUSEHOLD PRICE EXPOSURE (5 ESSENTIAL BASIC CHARTS)
     # ==================================================================
     if active_idx == 0:
-        st.subheader("National Cycles, Regional Gaps & Low-Income Exposure")
+        st.subheader("Why Staple Shocks Hit Low-Income Households Hardest")
         st.caption(
-            "Headline inflation peaked at 8.7% in early 2023, eased to 0.9% in July 2025, and rebounded to 7.8% in "
-            "October 2026. Beneath that national cycle sit wide regional disparities and a regressive food burden."
+            "Tracks how inflation moves across time, regions, and income groups through monthly price waves, "
+            "provincial shock distributions, regional rankings, retail rice pass-through, and household budget shares."
+        )
+        st.markdown(
+            "A single national inflation headline hides the sharpest pain points local price councils have to manage. "
+            "Between January 2019 and October 2026, Philippine inflation surged to `8.7%` in early 2023, cooled to "
+            "`0.9%` in July 2025, and rebounded to `7.8%` in October 2026. In everyday terms, `7.8%` inflation means "
+            "a household spending `₱10,000` on basic goods last year must now find `₱10,780` for the exact same items."
         )
 
+        # Basic 1: Line Chart
         ts_sql = f"""
             SELECT
                 obs_date,
                 ROUND(AVG(headline_yoy_pct), 2) AS Headline_YoY,
                 ROUND(AVG(b30_headline_yoy_pct), 2) AS Bottom30_YoY,
-                ROUND(AVG(natl_core_yoy_pct), 2) AS Natl_Core_YoY,
                 ROUND(AVG(rice_cpi_yoy_pct), 2) AS Rice_YoY
             FROM prov_panel {where_sql}
             GROUP BY obs_date ORDER BY obs_date
         """
         ts_df = con.execute(ts_sql).df()
-        audit_queries.append(("Monthly Inflation Timeline", len(ts_df), ts_sql))
+        audit_queries.append(("Monthly Household & Rice Timeline", len(ts_df), ts_sql))
 
         fig_ts = go.Figure()
         fig_ts.add_hrect(
             y0=2.0, y1=4.0,
             fillcolor="rgba(5,150,105,0.12)", line_width=0,
-            annotation_text="BSP Target Band (2.0%–4.0%)",
+            annotation_text="2.0%–4.0% Stability Band",
             annotation_position="top left",
         )
         for col, label, color, dash in [
-            ("Headline_YoY", "Headline CPI (All Income)", "#0F172A", "solid"),
-            ("Bottom30_YoY", "Bottom-30% Low-Income CPI", "#DC2626", "dash"),
-            ("Natl_Core_YoY", "Core CPI (Excludes Food & Energy)", "#2563EB", "dot"),
+            ("Headline_YoY", "Ordinary Households (All-Income)", "#0F172A", "solid"),
+            ("Bottom30_YoY", "Bottom-30% Low-Income Households", "#DC2626", "dash"),
             ("Rice_YoY", "Provincial Rice CPI", "#D97706", "solid"),
         ]:
             fig_ts.add_trace(go.Scatter(
                 x=ts_df["obs_date"], y=ts_df[col], mode="lines", name=label,
-                line=dict(color=color, width=2.3, dash=dash),
+                line=dict(color=color, width=2.4, dash=dash),
             ))
         fig_ts.update_layout(
-            title="Monthly Headline, Core, Bottom-30% & Rice Inflation Against the BSP Target",
-            height=385, margin=dict(t=45, b=20), yaxis_title="Year-on-Year Inflation (%)", hovermode="x unified",
+            title="Monthly Ordinary vs. Bottom-30% Inflation & Rice Price Waves",
+            height=355, margin=dict(t=42, b=18), yaxis_title="Year-on-Year Inflation (%)", hovermode="x unified",
         )
         st.plotly_chart(fig_ts, width="stretch")
         st.caption(
-            "Amber rice surges above `20%` in 2024 pull the red dashed Bottom-30% curve consistently above overall "
-            "headline inflation, while non-food Core CPI remains comparatively stable."
+            "Whenever rice inflation accelerates past `15%` to `24%`, the red dashed Bottom-30% line separates sharply "
+            "above the ordinary household rate, signaling immediate pressure on low-income consumers."
         )
 
+        st.markdown(
+            "#### Uneven Regional Pressure & Extreme Local Tails\n"
+            "Price surges rarely distribute evenly across the archipelago. Comparing the full distribution of monthly "
+            "provincial readings against regional medians shows that extreme inflation spikes are recurring local "
+            "supply events rather than statistical noise, with Bicol and MIMAROPA running consistently hotter than NCR."
+        )
+
+        # Basic 2 & 3: Histogram + Regional Bar
         col_a, col_b = st.columns(2)
         with col_a:
             dist_sql = f"""
@@ -580,24 +591,25 @@ def main():
                 GROUP BY 1 ORDER BY 1
             """
             dist_df = con.execute(dist_sql).df()
-            audit_queries.append(("Binned Distribution Histogram", len(dist_df), dist_sql))
+            audit_queries.append(("Provincial Distribution Histogram", len(dist_df), dist_sql))
             tukey_hi = float(summary.get("eda", {}).get("tukey_upper_fence", 11.25))
             fig_hist = px.bar(
                 dist_df, x="bin_yoy", y="cnt",
-                title="Provincial Inflation Distribution & Tail Extremes",
+                title="Provincial Inflation Distribution & Shock Outliers",
                 labels={"bin_yoy": "Headline YoY Inflation (%)", "cnt": "Province-Month Count"},
                 color_discrete_sequence=["#1D4ED8"],
             )
-            fig_hist.add_vline(x=4.0, line_dash="dash", line_color="#DC2626", annotation_text="BSP 4%")
+            fig_hist.add_vline(x=4.0, line_dash="dash", line_color="#DC2626", annotation_text="4% Alert")
             fig_hist.add_vline(
                 x=tukey_hi, line_dash="dot", line_color="#D97706",
                 annotation_text=f"Tukey Fence ({tukey_hi}%)",
             )
-            fig_hist.update_layout(height=365, margin=dict(t=45, b=20))
+            fig_hist.update_layout(height=335, margin=dict(t=42, b=18))
             st.plotly_chart(fig_hist, width="stretch")
             st.caption(
-                f"Positively skewed (`Skew = 0.50`, `Kurtosis = 3.25`); readings past the `{tukey_hi}%` Tukey upper "
-                "fence reflect acute island and commodity supply shocks."
+                f"Each bar counts how many province-months landed at that inflation rate. Readings beyond the "
+                f"`{tukey_hi}%` Tukey upper fence (`1.5x` the middle spread) signal severe local supply shocks rather "
+                "than normal seasonal fluctuation."
             )
 
         with col_b:
@@ -609,21 +621,30 @@ def main():
                 GROUP BY parent_region ORDER BY median_yoy DESC
             """
             reg_box = con.execute(reg_sql_q).df()
-            audit_queries.append(("Regional Median & Inequality Bar", len(reg_box), reg_sql_q))
+            audit_queries.append(("Regional Median & Bottom-30% Gap", len(reg_box), reg_sql_q))
             fig_bar = px.bar(
                 reg_box, x="median_yoy", y="parent_region", color="avg_b30_spread", orientation="h",
                 color_continuous_scale="Viridis",
-                title="Regional Median Inflation & Bottom-30% Spread",
+                title="Regional Median Inflation Shaded by Bottom-30% Penalty",
                 labels={"median_yoy": "Median YoY (%)", "parent_region": "", "avg_b30_spread": "B30 Gap (pp)"},
             )
             fig_bar.add_vline(x=4.0, line_dash="dash", line_color="#DC2626")
-            fig_bar.update_layout(height=365, margin=dict(t=45, b=20))
+            fig_bar.update_layout(height=335, margin=dict(t=42, b=18))
             st.plotly_chart(fig_bar, width="stretch")
             st.caption(
-                "Bicol and MIMAROPA run substantially hotter than NCR, with brighter Viridis shading marking steeper "
-                "extra inflation on low-income households."
+                "Regions are ordered from hottest to coolest median rate, with brighter bars highlighting where "
+                "low-income households pay the steepest extra inflation penalty."
             )
 
+        st.markdown(
+            "#### Why Rice Drives Regressive Inflation: Local Basket Math\n"
+            "Retail rice inflation correlates directly with provincial headline CPI across all 101 localities, yet "
+            "ordinary and low-income families do not feel that jump equally. Because poorer households devote a far "
+            "larger share of their monthly expenditure to rice and basic food, the exact same market price hike hits "
+            "Bottom-30% families nearly six times harder during high food-inflation periods."
+        )
+
+        # Basic 4 & 5: Rice Scatter + Basket Share Donuts
         col_c, col_d = st.columns(2)
         with col_c:
             scat_sql = f"""
@@ -636,16 +657,16 @@ def main():
                 GROUP BY 1, 2
             """
             scat_df = con.execute(scat_sql).df()
-            audit_queries.append(("Provincial Rice vs Headline Scatter", len(scat_df), scat_sql))
+            audit_queries.append(("Retail Rice vs Headline Scatter", len(scat_df), scat_sql))
             fig_scat = px.scatter(
                 scat_df, x="rice_retail_yoy", y="headline_yoy", color="island_group",
                 size="rice_wt_pct", hover_name="clean_geo",
                 color_discrete_sequence=px.colors.qualitative.Safe,
-                title="Retail Rice Price Growth vs. Headline CPI by Province",
+                title="Local Retail Rice Growth vs. Headline Inflation (101 Units)",
                 labels={
-                    "rice_retail_yoy": "Mean Retail Rice Price YoY (%)",
-                    "headline_yoy": "Mean Headline Inflation (%)",
-                    "island_group": "Island Group",
+                    "rice_retail_yoy": "Mean Retail Rice YoY (%)",
+                    "headline_yoy": "Mean Headline YoY (%)",
+                    "island_group": "Island",
                     "rice_wt_pct": "Rice Weight (%)",
                 },
             )
@@ -656,13 +677,13 @@ def main():
                 x_line = np.linspace(float(x_vals.min()), float(x_vals.max()), 40)
                 fig_scat.add_trace(go.Scatter(
                     x=x_line, y=slope * x_line + intercept, mode="lines",
-                    name="OLS Trend (r = 0.45)", line=dict(color="#0F172A", width=2, dash="dash"),
+                    name="OLS Fit (r = 0.45)", line=dict(color="#0F172A", width=2, dash="dash"),
                 ))
-            fig_scat.update_layout(height=365, margin=dict(t=45, b=20))
+            fig_scat.update_layout(height=335, margin=dict(t=42, b=18))
             st.plotly_chart(fig_scat, width="stretch")
             st.caption(
-                "Each point represents one province sized by its rice expenditure weight, confirming clear retail "
-                "rice pass-through into local headline inflation (`r = +0.45`)."
+                "Bubbles are sized by local rice budget weight. Provinces with faster retail rice increases systematically "
+                "record higher overall inflation (`r = +0.45`)."
             )
 
         with col_d:
@@ -679,12 +700,12 @@ def main():
                   AND b30_food_bev_weight IS NOT NULL
             """
             bsk = con.execute(bsk_sql).df().iloc[0]
-            audit_queries.append(("Household Basket Share Donuts", 1, bsk_sql))
-            labels_b = ["Rice", "Other Food & Drinks", "Housing, Power, Fuel & Other"]
+            audit_queries.append(("Household Basket Weights", 1, bsk_sql))
+            labels_b = ["Rice", "Other Food", "Power, Fuel & Other"]
             colors_b = ["#D97706", "#0D9488", "#334155"]
             fig_pie = make_subplots(
                 rows=1, cols=2, specs=[[{"type": "domain"}, {"type": "domain"}]],
-                subplot_titles=["All-Income Basket", "Bottom-30% Basket"],
+                subplot_titles=["Ordinary Basket", "Bottom-30% Basket"],
             )
             fig_pie.add_trace(
                 go.Pie(
@@ -703,93 +724,57 @@ def main():
                 row=1, col=2,
             )
             fig_pie.update_layout(
-                title="Expenditure Weights: All-Income vs. Bottom-30% Households",
-                height=365, margin=dict(t=55, b=20), legend=dict(orientation="h", y=-0.08),
+                title="Budget Shares: Ordinary vs. Bottom-30% Households",
+                height=335, margin=dict(t=52, b=18), legend=dict(orientation="h", y=-0.08),
             )
             st.plotly_chart(fig_pie, width="stretch")
             st.caption(
-                f"Bottom-30% households spend `{bsk['b30_rice']:.1f}%` of their total budget on rice versus "
-                f"`{bsk['gen_rice']:.1f}%` overall, explaining why staple price spikes hit low-income families hardest."
+                f"Bottom-30% households spend roughly `₱{bsk['b30_rice'] * 10:.0f}` out of every `₱1,000` on rice alone "
+                f"(`{bsk['b30_rice']:.1f}%`) compared with `₱{bsk['gen_rice'] * 10:.0f}` (`{bsk['gen_rice']:.1f}%`) for "
+                "ordinary households, magnifying every staple price jump."
             )
-
-        corr_sql = f"""
-            SELECT
-                headline_yoy_pct AS Headline,
-                b30_headline_yoy_pct AS Bottom30,
-                food_bev_yoy_pct AS Food,
-                rice_cpi_yoy_pct AS Rice,
-                elec_gas_fuel_yoy_pct AS Utilities,
-                transport_yoy_pct AS Transport,
-                gwpi_all_yoy_lag1 AS Wholesale_Lag1
-            FROM prov_panel {where_sql}
-            USING SAMPLE 950 ROWS (reservoir, 42)
-        """
-        corr_sample = con.execute(corr_sql).df()
-        audit_queries.append(("Driver Correlation Matrix Sample", len(corr_sample), corr_sql))
-        corr_mat = corr_sample.corr(numeric_only=True).round(2)
-        fig_corr = px.imshow(
-            corr_mat, text_auto=True, color_continuous_scale="Viridis", zmin=-0.2, zmax=1.0,
-            title="Cross-Driver Correlation Matrix: Upstream Wholesale, Staples & Headline CPI",
-            aspect="auto",
-        )
-        fig_corr.update_layout(height=335, margin=dict(t=45, b=15))
-        st.plotly_chart(fig_corr, width="stretch")
 
         if summary:
             ht = summary.get("hypothesis_tests", {})
-            eda = summary.get("eda", {})
-            st.markdown("##### Statistical Diagnostics")
-            s1, s2, s3, s4 = st.columns(4)
-            s1.metric(
-                "Regional One-Way ANOVA",
-                f"F = {ht.get('H1_regional_anova_F')}",
-                "p < 0.001",
-                border=True,
-                help="Confirms statistically significant inflation differences across the 18 regions.",
-            )
-            s2.metric(
-                "Bottom-30% Spread (All Months)",
-                f"+{ht.get('H2_b30_vs_all_mean_diff_pp')} pp",
-                f"t = {ht.get('H2_b30_paired_t')}",
-                delta_color="inverse",
-                border=True,
-                help="Paired t-test showing low-income households face systematically higher monthly inflation.",
-            )
-            s3.metric(
-                "Bottom-30% Spread (Food >5%)",
-                f"+{ht.get('H2_high_food_b30_diff_pp')} pp",
-                f"t = {ht.get('H2_high_food_paired_t')}",
-                delta_color="inverse",
-                border=True,
-                help="During high food-inflation regimes above 5%, the low-income inflation penalty widens nearly sixfold.",
-            )
-            s4.metric(
-                "Lagged Wholesale Correlation",
-                f"r = +{ht.get('H3_gwpi_lag1_pearson_r')}",
-                f"Tukey Fence: {eda.get('tukey_upper_fence')}%",
-                border=True,
-                help="Prior-month island Wholesale Price Index growth leads next-month provincial CPI.",
-            )
+            with st.expander("Statistical Verification: ANOVA, Paired t-Tests & Upstream Correlations"):
+                st.markdown(
+                    f"- **Regional Divergence (One-Way ANOVA):** `F = {ht.get('H1_regional_anova_F')}`, `p < 0.001` "
+                    f"across all 18 regions (`Island F = {ht.get('H1_island_anova_F')}`), confirming regional inflation "
+                    "differences are structural rather than random noise.\n"
+                    f"- **Regressive Food Inequality (Paired t-Test):** Bottom-30% inflation exceeds ordinary inflation "
+                    f"by `+{ht.get('H2_b30_vs_all_mean_diff_pp')} pp` overall (`t = {ht.get('H2_b30_paired_t')}`), jumping "
+                    f"nearly sixfold to **`+{ht.get('H2_high_food_b30_diff_pp')} pp`** (`t = {ht.get('H2_high_food_paired_t')}`) "
+                    "during high food-inflation regimes above `5%`.\n"
+                    f"- **Upstream Cost Linkage:** Local retail rice YoY correlates at `r = +{ht.get('H3_rice_yoy_pearson_r')}` "
+                    f"and prior-month island Wholesale GWPI correlates at `r = +{ht.get('H3_gwpi_lag1_pearson_r')}` with "
+                    "provincial headline inflation."
+                )
 
         render_section_footer(
             step_num=1,
             summary_line=(
-                "Regional medians diverge significantly across the country, and staple food surges widen the "
-                "low-income inflation gap nearly sixfold. Next, examine where specific provincial hotspots cluster "
-                "and how cost pressures transmit across spending categories."
+                "**Key Finding:** Regional prices diverge significantly and rice surges hit Bottom-30% budgets nearly "
+                "six times harder. Next, map where chronic hotspots cluster across all 101 localities and trace how "
+                "food, electricity, and fuel pressure flows through local baskets."
             ),
             next_idx=1,
             next_label="Provincial Hotspots & Flows →",
         )
 
     # ==================================================================
-    # SECTION 2: PROVINCIAL HOTSPOTS & FLOWS
+    # SECTION 2: PROVINCIAL HOTSPOTS & FLOWS (5 ESSENTIAL ADVANCED CHARTS)
     # ==================================================================
     elif active_idx == 1:
-        st.subheader("Subnational Hotspots & Supply-to-Basket Transmission")
+        st.subheader("Where Local Price Pressure Clusters & How Shocks Travel")
         st.caption(
-            "Coordinate geography, basket hierarchies, and multi-channel cost flows across all 101 provinces and "
-            "highly urbanized cities."
+            "Maps chronic provincial hotspots and traces commodity drivers using a 101-locality bubble map, "
+            "regional spending sunburst, cost-channel Sankey flow, compound shock profile, and category stream."
+        )
+        st.markdown(
+            "Regional averages still conceal which exact municipalities need market inspections or Kadiwa rolling "
+            "stores first. Outer-island supply corridors face freight bottlenecks that push local inflation past the "
+            "`4.0%` alert ceiling more than half the time, while spending hierarchies reveal whether food or energy "
+            "drives each area's cost burden."
         )
 
         geo_sql = f"""
@@ -798,17 +783,15 @@ def main():
                 ROUND(AVG(headline_yoy_pct), 2) AS mean_yoy,
                 ROUND(AVG(b30_inflation_spread_pp), 2) AS mean_b30_spread,
                 ROUND(AVG(is_breach_bsp_4pct) * 100.0, 1) AS breach_freq_pct,
-                ROUND(AVG(food_bev_yoy_pct), 2) AS mean_food_yoy,
                 ROUND(AVG(rice_cpi_yoy_pct), 2) AS mean_rice_yoy,
                 ROUND(AVG(elec_gas_fuel_yoy_pct), 2) AS mean_util_yoy,
-                ROUND(AVG(transport_yoy_pct), 2) AS mean_trans_yoy,
-                ROUND(MIN(ppp_index), 2) AS min_ppp
+                ROUND(AVG(transport_yoy_pct), 2) AS mean_trans_yoy
             FROM prov_panel {where_sql}
             GROUP BY 1, 2, 3, 4, 5
             HAVING latitude IS NOT NULL
         """
         geo_agg = con.execute(geo_sql).df()
-        audit_queries.append(("Provincial Geospatial & Parallel Summary", len(geo_agg), geo_sql))
+        audit_queries.append(("Provincial Map & Multi-Driver Profiles", len(geo_agg), geo_sql))
 
         c_map, c_sun = st.columns(2)
         with c_map:
@@ -821,20 +804,19 @@ def main():
                     "mean_yoy": ":.2f",
                     "breach_freq_pct": ":.1f",
                     "mean_b30_spread": ":+.2f",
-                    "min_ppp": ":.2f",
                     "latitude": False,
                     "longitude": False,
                 },
                 color_continuous_scale="Viridis", zoom=4.6, center={"lat": 12.8, "lon": 122.2},
                 map_style="carto-positron",
-                title="Provincial Mean Inflation & >4.0% Breach Frequency",
-                labels={"mean_yoy": "Mean YoY (%)", "breach_freq_pct": "Breach %"},
+                title="Provincial Inflation Intensity & >4.0% Alert Frequency",
+                labels={"mean_yoy": "Mean YoY (%)", "breach_freq_pct": "Alert %"},
             )
-            fig_geo.update_layout(height=460, margin=dict(t=40, b=10, l=0, r=0))
+            fig_geo.update_layout(height=405, margin=dict(t=40, b=10, l=0, r=0))
             st.plotly_chart(fig_geo, width="stretch")
             st.caption(
-                "Bubble size encodes `>4.0%` breach frequency; outer-island shipping corridors such as Batanes "
-                "(`5.25%`), Dinagat Islands (`5.07%`), and Occidental Mindoro face the most persistent pressure."
+                "Larger, brighter bubbles breach `4.0%` most often, spotlighting outer-island hotspots such as "
+                "Batanes (`5.25%`), Dinagat Islands (`5.07%`), and Occidental Mindoro."
             )
 
         with c_sun:
@@ -853,25 +835,33 @@ def main():
                 GROUP BY 1, 2, 3
             """
             sun_df = con.execute(sun_sql).df()
-            audit_queries.append(("Hierarchical Sunburst Decomposition", len(sun_df), sun_sql))
+            audit_queries.append(("Regional Spending Hierarchy", len(sun_df), sun_sql))
             fig_sun = px.sunburst(
                 sun_df, path=["island_group", "parent_region", "coicop_name"],
                 values="abs_pp_contrib", color="avg_yoy", color_continuous_scale="Viridis",
-                title="Regional & Spending-Division Contribution Hierarchy",
+                title="Island, Region & Commodity Contribution Hierarchy",
                 labels={"avg_yoy": "Category YoY (%)"},
             )
-            fig_sun.update_layout(height=460, margin=dict(t=40, b=10, l=0, r=0))
+            fig_sun.update_layout(height=405, margin=dict(t=40, b=10, l=0, r=0))
             st.plotly_chart(fig_sun, width="stretch")
-            st.caption("Select any island or region ring to drill down into local COICOP category contributions.")
+            st.caption("Click any island or region ring to zoom into the exact spending categories driving local pressure.")
+
+        st.markdown(
+            "#### Tracing Cost Channels & Compound Provincial Exposure\n"
+            "Local councils get the highest leverage by targeting the specific supply channels behind household pain. "
+            "Across Luzon, Visayas, and Mindanao, **rice and food (`48%`)** together with **electricity, LPG, and "
+            "diesel (`28%`)** generate more than three-quarters of cumulative inflation pressure. Use the parallel "
+            "axes below to filter localities hit by multiple channels at once."
+        )
 
         c_san, c_par = st.columns(2)
         with c_san:
             san_sql = f"""
                 SELECT
                     CASE
-                        WHEN coicop_code IN ('01') THEN 'Food Supply & Rice'
-                        WHEN coicop_code IN ('04','07') THEN 'Utilities & Transport Fuel'
-                        ELSE 'Core Goods & Services'
+                        WHEN coicop_code IN ('01') THEN 'Rice & Food Supply'
+                        WHEN coicop_code IN ('04','07') THEN 'Electricity, LPG & Diesel'
+                        ELSE 'Other Goods & Services'
                     END AS driver_channel,
                     coicop_name,
                     island_group,
@@ -886,7 +876,7 @@ def main():
                 GROUP BY 1, 2, 3
             """
             san_df = con.execute(san_sql).df()
-            audit_queries.append(("Sankey Supply Transmission", len(san_df), san_sql))
+            audit_queries.append(("Cost-Channel Sankey Transmission", len(san_df), san_sql))
             nodes = list(dict.fromkeys(
                 san_df["driver_channel"].tolist() + san_df["coicop_name"].tolist() + san_df["island_group"].tolist()
             ))
@@ -902,39 +892,28 @@ def main():
                 ),
             ))
             fig_san.update_layout(
-                title="Cost-Push Transmission: Supply Channels to Basket Divisions to Islands",
-                height=430, margin=dict(t=40, b=10),
+                title="Supply-Channel Flow Into Household Baskets & Islands",
+                height=380, margin=dict(t=40, b=10),
             )
             st.plotly_chart(fig_san, width="stretch")
-            st.caption(
-                "Food and rice (`48%`) alongside housing utilities and transport (`28%`) generate over three-quarters "
-                "of cumulative subnational inflation pressure."
-            )
 
         with c_par:
             fig_par = px.parallel_coordinates(
                 geo_agg,
-                dimensions=[
-                    "mean_yoy", "mean_food_yoy", "mean_rice_yoy",
-                    "mean_util_yoy", "mean_trans_yoy", "mean_b30_spread",
-                ],
+                dimensions=["mean_yoy", "mean_rice_yoy", "mean_util_yoy", "mean_trans_yoy", "mean_b30_spread"],
                 color="mean_yoy", color_continuous_scale="Viridis",
                 labels={
                     "mean_yoy": "Headline %",
-                    "mean_food_yoy": "Food %",
                     "mean_rice_yoy": "Rice %",
-                    "mean_util_yoy": "Power/Fuel %",
+                    "mean_util_yoy": "Power/LPG %",
                     "mean_trans_yoy": "Transport %",
                     "mean_b30_spread": "B30 Gap (pp)",
                 },
-                title="Multi-Driver Provincial Risk Profiles (101 Units)",
+                title="Compound Shock Profile Across 101 Localities",
             )
-            fig_par.update_layout(height=430, margin=dict(t=45, b=10))
+            fig_par.update_layout(height=380, margin=dict(t=45, b=10))
             st.plotly_chart(fig_par, width="stretch")
-            st.caption(
-                "Drag vertically along any axis to filter provinces experiencing simultaneous rice, utility, and "
-                "low-income spread pressure."
-            )
+            st.caption("Drag vertically along any axis to isolate provinces facing simultaneous rice, utility, and fuel spikes.")
 
         st_sql = f"""
             SELECT obs_date, coicop_name, ROUND(AVG(weighted_pp_contrib), 3) AS avg_contrib_pp
@@ -948,75 +927,79 @@ def main():
             GROUP BY 1, 2 ORDER BY 1, 2
         """
         st_df = con.execute(st_sql).df()
-        audit_queries.append(("Stream-Style Category Contributions", len(st_df), st_sql))
+        audit_queries.append(("Category Contribution Stream", len(st_df), st_sql))
         fig_stream = px.area(
             st_df, x="obs_date", y="avg_contrib_pp", color="coicop_name",
             color_discrete_sequence=px.colors.qualitative.Safe,
-            title="Category Percentage-Point Contributions Over Time (2019–2026)",
+            title="Weighted Inflation Contributions by Spending Division (2019–2026)",
             labels={"avg_contrib_pp": "Weighted Contribution (pp)", "obs_date": "", "coicop_name": "Division"},
         )
-        fig_stream.update_layout(height=360, margin=dict(t=40, b=10), hovermode="x unified")
+        fig_stream.update_layout(height=320, margin=dict(t=40, b=10), hovermode="x unified")
         st.plotly_chart(fig_stream, width="stretch")
         st.caption(
-            "Food drove the 2023 surge, contracted sharply during the 2025 disinflation, and accelerated again "
-            "alongside transport in 2026."
+            "Food dominated the 2023 surge, receded sharply in mid-2025, and returned alongside transport fuel in 2026, "
+            "confirming why councils must monitor both food and energy channels together."
         )
 
         render_section_footer(
             step_num=2,
             summary_line=(
-                "Outer islands and food-intensive provinces absorb the most frequent target breaches. "
-                "Next, evaluate out-of-time forecast accuracy, prediction intervals, and early breach alerts."
+                "**Key Finding:** Food, electricity, and transport fuel account for over three-quarters of local "
+                "inflation pressure and cluster in outer-island supply corridors. Next, examine blind 2025–2026 "
+                "forecasts and early price-alert performance."
             ),
             prev_idx=0,
-            prev_label="← National vs. Local Reality",
+            prev_label="← Household Price Exposure",
             next_idx=2,
-            next_label="Forecasts & Breach Risk →",
+            next_label="Next-Month Forecasts & Alerts →",
         )
 
     # ==================================================================
-    # SECTION 3: FORECASTS & BREACH RISK
+    # SECTION 3: NEXT-MONTH FORECASTS & ALERTS (INLINE CONTROLS + CONTEXT)
     # ==================================================================
     elif active_idx == 2:
-        st.subheader("Out-of-Time Forecasting, Uncertainty Bands & Feature Attribution")
+        st.subheader("Blind 2025–2026 Forecasts, Uncertainty & Early Price Alerts")
         st.caption(
-            "All models train strictly on 2020–2024 and are evaluated blind across 2,121 provincial observations from "
-            "Jan 2025 to Sep 2026, covering both the 0.9% trough and the 7.8% rebound."
+            "Evaluates blind next-month forecast accuracy, multi-month SARIMAX uncertainty bands, TreeSHAP drivers, "
+            "interactive >4.0% council alert cutoffs, and abrupt supply-shock misses."
+        )
+        st.markdown(
+            "To prevent future price trends from leaking into evaluation, every model trains strictly on `2020–2024` "
+            "and is tested blind on `2,020` paired provincial holdout months across `2025–2026`. Linear **Ridge "
+            "Regression** outperforms tree ensembles out-of-time because linear shrinkage extrapolates smoothly "
+            "across the sharp swing from `0.9%` to `7.8%`, whereas tree leaves clip near past training bounds."
         )
 
-        lb_col1, lb_col2 = st.columns([1.35, 1.0])
-        with lb_col1:
-            st.markdown("##### `2025–2026` Out-of-Time Holdout Leaderboard")
-            if summary and "regression_oot_2025_2026" in summary:
-                reg_lb = pd.DataFrame(summary["regression_oot_2025_2026"]).T.reset_index().rename(
-                    columns={
-                        "index": "Model",
-                        "CV_MAE": "2020–24 CV MAE (pp)",
-                        "MAE": "Holdout MAE (pp)",
-                        "RMSE": "Holdout RMSE (pp)",
-                        "R2": "Holdout R²",
-                    }
-                )
-                st.dataframe(reg_lb, width="stretch", hide_index=True)
-        with lb_col2:
-            st.info(
-                "**Regime-Shift Takeaway:** Tree ensembles clip predictions inside historical `2020–2024` leaf bounds "
-                "when inflation reverses sharply. **Ridge Regression** (`0.93 pp` MAE, `0.874` R²) extrapolates "
-                "cleanly across turning points, while **XGBoost Classifier** flags `>4.0%` breaches at `92.6%` "
-                "accuracy (`0.976` ROC-AUC)."
-            )
+        st.info(
+            f"**What the Holdout Accuracy Numbers Mean (`2025–2026`):** "
+            f"Ordinary Ridge averages **`{eng['ridge_mae']:.2f} pp` MAE** (`R² = {eng['ridge_r2']:.3f}`), meaning "
+            f"forecasts typically land within `1` percentage point of the actual PSA release and explain "
+            f"`{eng['ridge_r2'] * 100:.0f}%` of provincial variation. Bottom-30% Ridge averages **`{eng['b30_mae']:.2f} pp` "
+            f"MAE** (`R² = {eng['b30_r2']:.3f}`), while the XGBoost alert model flags `>4.0%` surges at "
+            f"**`{eng['clf_acc']:.1%}` accuracy** (`ROC-AUC = {eng['clf_auc']:.3f}`, indicating near-complete separation "
+            "between calm and overheating months)."
+        )
 
-        f_top1, f_top2 = st.columns([1.6, 1.4])
-        with f_top1:
+        # 1. Dynamic SARIMAX Fan Chart with Inline Horizon Control
+        st.markdown("#### Multi-Month Outlook & Forecast Uncertainty")
+        st.caption(
+            "Single-point predictions conceal risk. Adjust the horizon below to see how `80%` and `95%` prediction "
+            "bands widen as seasonal uncertainty compounds across future months."
+        )
+        fc_c1, fc_c2 = st.columns([1.6, 1.2])
+        with fc_c1:
             sel_fc_geo = st.selectbox(
-                "National or Regional Series (SARIMAX Fan Chart)",
+                "National or Regional Series",
                 ["PHILIPPINES"] + regs_all,
                 help="Fits a seasonal SARIMAX(1,0,1)(1,0,1,12) model with 80% and 95% confidence bands.",
             )
-        with f_top2:
-            st.caption(
-                f"Active horizon: `{horizon_mo}` months (adjust **SARIMAX Horizon** in the sidebar to inspect "
-                "interval widening)."
+        with fc_c2:
+            horizon_mo = st.slider(
+                "Forecast Horizon (Months)",
+                3,
+                12,
+                key="fc_horizon",
+                help="Number of months projected ahead in the uncertainty fan chart.",
             )
 
         fan_sql = f"""
@@ -1026,7 +1009,7 @@ def main():
             ORDER BY obs_date
         """
         geo_ts = con.execute(fan_sql).df()
-        audit_queries.append(("Regional SARIMAX Time Series", len(geo_ts), fan_sql))
+        audit_queries.append(("Regional SARIMAX Series", len(geo_ts), fan_sql))
         geo_ts["obs_date"] = pd.to_datetime(geo_ts["obs_date"])
         s_series = geo_ts.set_index("obs_date")["headline_yoy_pct"].asfreq("MS")
         sar_fit = SARIMAX(
@@ -1041,7 +1024,7 @@ def main():
         fig_fan = go.Figure()
         fig_fan.add_hrect(
             y0=2.0, y1=4.0, fillcolor="rgba(5,150,105,0.11)", line_width=0,
-            annotation_text="BSP 2%–4% Target", annotation_position="top left",
+            annotation_text="2%–4% Stability Band", annotation_position="top left",
         )
         fig_fan.add_trace(go.Scatter(
             x=s_series.index[-36:], y=s_series.values[-36:], mode="lines",
@@ -1061,107 +1044,103 @@ def main():
         ))
         fig_fan.add_trace(go.Scatter(
             x=fwd_dates, y=fc.predicted_mean.values, mode="lines+markers",
-            name=f"SARIMAX {horizon_mo}-Mo Forecast", line=dict(color="#EA580C", width=2.5),
+            name=f"{horizon_mo}-Mo Forecast", line=dict(color="#EA580C", width=2.5),
         ))
         fig_fan.update_layout(
-            height=380,
-            title=f"SARIMAX Forecast & Prediction Intervals: {sel_fc_geo} ({horizon_mo}-Month Horizon, AIC = {sar_fit.aic:.1f})",
-            yaxis_title="Year-on-Year Inflation (%)", margin=dict(t=45, b=20), hovermode="x unified",
+            height=345,
+            title=f"SARIMAX Forecast & Uncertainty Bands: {sel_fc_geo} ({horizon_mo} Months)",
+            yaxis_title="Year-on-Year Inflation (%)", margin=dict(t=42, b=18), hovermode="x unified",
         )
         st.plotly_chart(fig_fan, width="stretch")
 
-        c_xai, c_roc = st.columns(2)
-        with c_xai:
-            if SHAP_CSV.exists():
-                sh_df = pd.read_csv(SHAP_CSV).head(10).iloc[::-1].copy()
+        # Optional XAI Attribution Expander (keeps main canvas uncluttered)
+        if SHAP_CSV.exists():
+            with st.expander("Model Attribution: What Drives Next-Month Forecasts? (TreeSHAP)"):
+                st.caption(
+                    "Because monthly year-over-year inflation overlaps eleven of twelve months with the prior month, "
+                    "current momentum dominates point forecasts, reinforced by Core CPI, seasonal harvest cycles, "
+                    "prior-month Wholesale GWPI, and diesel fuel."
+                )
+                sh_df = pd.read_csv(SHAP_CSV).head(8).iloc[::-1].copy()
                 sh_df["readable_feature"] = sh_df["feature"].map(humanize_feature)
                 fig_sh = px.bar(
                     sh_df, x="mean_abs_shap", y="readable_feature", orientation="h",
                     hover_data={"feature": True, "mean_abs_shap": ":.3f", "readable_feature": False},
-                    title="TreeSHAP Feature Attribution (Next-Month Forecast)",
+                    title="Top 8 Next-Month Forecast Drivers (TreeSHAP)",
                     color_discrete_sequence=["#0D9488"],
                 )
                 fig_sh.update_layout(
-                    height=380, yaxis_title="", xaxis_title="Mean |SHAP| Contribution (pp)",
-                    margin=dict(t=45, b=20),
+                    height=310, yaxis_title="", xaxis_title="Mean |SHAP| Impact (pp)",
+                    margin=dict(t=40, b=15),
                 )
                 st.plotly_chart(fig_sh, width="stretch")
-                st.caption(
-                    "Recent inflation momentum leads attribution, reinforced by national Core CPI, seasonal harvest "
-                    "cycles, lagged island Wholesale GWPI, and transport fuel."
-                )
 
-        with c_roc:
+        # 2. Interactive ROC Alert Cutoff + Cross-Filtered Abrupt Shock Inspector
+        st.divider()
+        st.markdown("#### Early Price-Alert Calibration & Abrupt Shock Diagnostics")
+        st.markdown(
+            "Local councils balance two operational costs: acting too late misses a food surge, while acting on weak "
+            "signals wastes inspection teams. Tune the alert cutoff on the left to calibrate false alarms versus "
+            "caught surges, then inspect sudden supply-shock misses on the right to see why scenario testing matters."
+        )
+
+        diag_l, diag_r = st.columns([1.0, 1.35])
+        with diag_l:
+            tau = st.slider(
+                ">4.0% Price-Alert Cutoff (τ)",
+                0.15,
+                0.85,
+                step=0.02,
+                key="alert_tau",
+                help="Lower cutoffs trigger earlier LPCC alerts with higher recall; higher cutoffs reduce false alarms.",
+            )
             y_true_c = eng["y_te_clf"]
             probs_c = eng["probs_te"]
             pred_c = (probs_c >= tau).astype(int)
-            cm = confusion_matrix(y_true_c, pred_c)
-            tn, fp, fn, tp = cm.ravel()
+            tn, fp, fn, tp = confusion_matrix(y_true_c, pred_c).ravel()
             prec_v = tp / max(tp + fp, 1)
             rec_v = tp / max(tp + fn, 1)
-            auc_v = roc_auc_score(y_true_c, probs_c)
             fpr, tpr, thresh_arr = roc_curve(y_true_c, probs_c)
             idx_tau = int(np.argmin(np.abs(thresh_arr - tau)))
 
             fig_roc = go.Figure()
             fig_roc.add_trace(go.Scatter(
                 x=fpr, y=tpr, mode="lines",
-                name=f"XGBoost >4% Classifier (AUC = {auc_v:.3f})", line=dict(color="#1D4ED8", width=2.6),
+                name=f"XGBoost Alert (AUC = {eng['clf_auc']:.3f})", line=dict(color="#1D4ED8", width=2.6),
             ))
             fig_roc.add_trace(go.Scatter(
                 x=[fpr[idx_tau]], y=[tpr[idx_tau]], mode="markers",
-                name=f"Active Cutoff (τ = {tau:.2f})",
+                name=f"Cutoff τ = {tau:.2f}",
                 marker=dict(color="#DC2626", size=12, symbol="star"),
             ))
             fig_roc.add_trace(go.Scatter(
-                x=[0, 1], y=[0, 1], mode="lines", name="Random Baseline",
+                x=[0, 1], y=[0, 1], mode="lines", name="Random",
                 line=dict(dash="dash", color="#64748B"),
             ))
             fig_roc.update_layout(
-                height=290, title="ROC Diagnostic: >4.0% BSP Breach Classifier",
-                xaxis_title="False Positive Rate", yaxis_title="True Positive Rate",
-                margin=dict(t=45, b=20),
+                height=300, title=">4.0% Early-Alert ROC Curve",
+                xaxis_title="False Alarm Rate", yaxis_title="Caught Surge Rate",
+                margin=dict(t=42, b=18),
             )
             st.plotly_chart(fig_roc, width="stretch")
             st.caption(
-                f"**Cutoff τ = `{tau:.2f}`:** Caught Breaches `{tp}` · False Alarms `{fp}` · Missed `{fn}` · "
-                f"Safe `{tn}` (`Precision = {prec_v:.1%}`, `Recall = {rec_v:.1%}`)"
+                f"**At τ = `{tau:.2f}`:** The model caught **`{tp}`** real surges, missed **`{fn}`**, and raised "
+                f"**`{fp}`** false alarms. Precision of **`{prec_v:.1%}`** means roughly `{round(prec_v * 10)}` in `10` "
+                f"council alerts are genuine, while Recall of **`{rec_v:.1%}`** shows the share of true surges caught early."
             )
 
-        st.divider()
-        st.markdown("##### Holdout Error Diagnostics & Cross-Filtered Trajectory")
-        st.caption(
-            "Inspect the largest `2025–2026` provincial prediction misses on the left to view observed versus "
-            "forecast trajectories and shock months on the right."
-        )
-        err_df = eng["te_meta"].copy()
-        err_df["predicted_yoy_t1"] = np.round(eng["preds_te"], 2)
-        err_df["abs_error_pp"] = np.round(np.abs(err_df["target_yoy_t1"] - err_df["predicted_yoy_t1"]), 2)
-        top_err = err_df.sort_values("abs_error_pp", ascending=False).head(10)
-
-        ce1, ce2 = st.columns([1.05, 1.35])
-        with ce1:
-            st.dataframe(
-                top_err[["clean_geo", "parent_region", "obs_date", "target_yoy_t1", "predicted_yoy_t1", "abs_error_pp"]].rename(
-                    columns={
-                        "clean_geo": "Province / HUC",
-                        "parent_region": "Region",
-                        "obs_date": "Month",
-                        "target_yoy_t1": "Actual %",
-                        "predicted_yoy_t1": "Predicted %",
-                        "abs_error_pp": "Error (pp)",
-                    }
-                ),
-                width="stretch",
-                hide_index=True,
-            )
-        with ce2:
+        with diag_r:
+            err_df = eng["te_meta"].copy()
+            err_df["predicted_yoy_t1"] = np.round(eng["preds_te"], 2)
+            err_df["abs_error_pp"] = np.round(np.abs(err_df["target_yoy_t1"] - err_df["predicted_yoy_t1"]), 2)
+            top_err = err_df.sort_values("abs_error_pp", ascending=False).head(8)
             err_geos = list(dict.fromkeys(top_err["clean_geo"].tolist()))
+
             sel_err_geo = st.selectbox(
-                "Province Holdout Trajectory",
+                "Cross-Filtered High-Error Locality (Top 2025–2026 Shock Misses)",
                 err_geos,
                 index=0,
-                help="Highlights holdout months where abrupt local price jumps produced forecast errors of 2.0 pp or more.",
+                help="Select a locality with large holdout errors to inspect abrupt supply-shock months flagged in red.",
             )
             sub_err = err_df[err_df["clean_geo"] == sel_err_geo].sort_values("obs_date")
             big_pts = sub_err[sub_err["abs_error_pp"] >= 2.0]
@@ -1177,16 +1156,16 @@ def main():
             if len(big_pts):
                 fig_err.add_trace(go.Scatter(
                     x=big_pts["obs_date"], y=big_pts["target_yoy_t1"], mode="markers",
-                    name="Shock Month (>=2 pp error)",
+                    name="Abrupt Shock (>=2 pp miss)",
                     marker=dict(color="#DC2626", size=11, symbol="diamond"),
                 ))
             fig_err.update_layout(
-                height=290, title=f"Observed vs. Predicted Holdout Series: {sel_err_geo}",
-                yaxis_title="YoY Inflation (%)", margin=dict(t=40, b=15),
+                height=300, title=f"Observed vs. Predicted Holdout Trajectory: {sel_err_geo}",
+                yaxis_title="YoY Inflation (%)", margin=dict(t=42, b=18),
             )
             st.plotly_chart(fig_err, width="stretch")
             st.button(
-                f"Simulate Supply Shocks for {sel_err_geo} →",
+                f"Stress-Test {sel_err_geo} in LPCC Simulator →",
                 key="btn_handoff_err_prov",
                 on_click=go_to_section,
                 args=(3, sel_err_geo),
@@ -1196,215 +1175,226 @@ def main():
         render_section_footer(
             step_num=3,
             summary_line=(
-                "Statistical lag models capture momentum accurately, whereas sudden typhoon, tariff, or fuel shocks "
-                "create sharp single-month jumps that require forward scenario stress-testing."
+                "**Key Finding:** Momentum models forecast steady months reliably and flag `>4.0%` alerts at `92.0%+` "
+                "accuracy, yet red-diamond supply shocks happen overnight. Open the simulator next to test rice, "
+                "electricity, and diesel shocks before they hit public markets."
             ),
             prev_idx=1,
             prev_label="← Provincial Hotspots & Flows",
             next_idx=3,
-            next_label="Supply-Shock Simulator →",
+            next_label="LPCC Supply-Shock Simulator →",
         )
 
     # ==================================================================
-    # SECTION 4: SUPPLY-SHOCK SIMULATOR
+    # SECTION 4: LPCC SUPPLY-SHOCK SIMULATOR (CLEAN DEFAULT + OPTIONAL COMPARE)
     # ==================================================================
     else:
-        st.subheader("Supply-Shock & Low-Income Equity Simulator")
+        st.subheader("LPCC Next-Month Shock Simulator: Ordinary vs. Bottom-30% Households")
         st.caption(
-            "Test how sudden rice, electricity, fuel, and wholesale price shifts pass through local provincial "
-            "baskets, next-month ML forecasts, and Bottom-30% household budgets."
+            "Translates hypothetical rice, electricity, and diesel price jumps into next-month ordinary and "
+            "Bottom-30% forecasts, an 80% risk trajectory, optional cross-province comparisons, and LPCC advisories."
+        )
+        st.markdown(
+            "When a typhoon damages palay harvests or global crude spikes raise pump prices, local councils need "
+            "immediate household estimates before the next PSA release. Choose a locality and adjust **rice, "
+            "electricity, and diesel** below to see how percentage-point (`pp`) price shifts pass through official "
+            "local CPI weights into ordinary and Bottom-30% household budgets next month."
         )
 
-        st.markdown("##### Scenario Presets")
         p1, p2, p3, p4 = st.columns(4)
         p1.button(
             "Rice Supply Spike (+12 pp)",
-            on_click=apply_shock_preset, args=(12.0, 2.0, 2.0, 3.0), width="stretch",
-            help="Applies a sharp domestic harvest shortfall or import bottleneck on retail rice prices.",
+            on_click=apply_shock_preset, args=(12.0, 2.0, 2.0), width="stretch",
+            help="Simulates a domestic harvest shortfall or import delay pushing retail rice up sharply.",
         )
         p2.button(
-            "Energy & Fuel Surge",
-            on_click=apply_shock_preset, args=(3.0, 9.0, 11.0, 6.0), width="stretch",
-            help="Applies concurrent electricity, LPG, and diesel transport rate increases.",
+            "Power & Diesel Surge",
+            on_click=apply_shock_preset, args=(3.0, 9.0, 11.0), width="stretch",
+            help="Simulates concurrent electricity/LPG hikes and diesel transport fare pass-through.",
         )
         p3.button(
-            "Tariff & Buffer Relief",
-            on_click=apply_shock_preset, args=(-8.0, -2.0, -4.0, -2.0), width="stretch",
-            help="Applies Kadiwa/NFA buffer-stock releases, tariff reductions, and pump fuel rollbacks.",
+            "Kadiwa & Tariff Relief",
+            on_click=apply_shock_preset, args=(-8.0, -2.0, -4.0), width="stretch",
+            help="Simulates NFA/Kadiwa rice buffer releases, tariff cuts, and fuel rollbacks.",
         )
         p4.button(
             "Reset Baseline Shock",
-            on_click=apply_shock_preset, args=(8.0, 5.0, 6.0, 3.0), width="stretch",
-            help="Restores the default benchmark shock (+8 pp Rice, +5 pp Utilities, +6 pp Fuel, +3 pp GWPI).",
+            on_click=apply_shock_preset, args=(8.0, 5.0, 6.0), width="stretch",
+            help="Restores the standard scenario (+8 pp Rice, +5 pp Electricity/LPG, +6 pp Diesel).",
         )
 
         provs = sorted(eng["df"]["clean_geo"].unique().tolist())
         if st.session_state["sim_prov"] not in provs:
             st.session_state["sim_prov"] = "City of Baguio" if "City of Baguio" in provs else provs[0]
 
-        sel_col1, sel_col2 = st.columns(2)
-        with sel_col1:
+        top_s1, top_s2 = st.columns([2.0, 1.0])
+        with top_s1:
             sel_prov = st.selectbox(
-                "Target Province or City",
+                "Target Province or Highly Urbanized City",
                 provs,
                 key="sim_prov",
-                help="Primary province or HUC evaluated using its official PSA basket weights and latest observations.",
+                help="Locality evaluated using its official PSA All-Income and Bottom-30% basket weights.",
             )
-        default_cmp = "Camarines Sur" if sel_prov != "Camarines Sur" and "Camarines Sur" in provs else (
-            "City of Baguio" if sel_prov != "City of Baguio" and "City of Baguio" in provs else provs[0]
-        )
-        with sel_col2:
-            cmp_prov = st.selectbox(
-                "Benchmark Comparison Province",
-                provs,
-                index=provs.index(default_cmp),
-                help="Contrasts how the identical price shock translates into a second province's local basket.",
+        with top_s2:
+            st.markdown("")
+            show_cmp = st.toggle(
+                "Compare with a second locality",
+                value=False,
+                key="toggle_cmp_prov",
+                help="Opens a side-by-side comparison showing how identical shocks hit a second province differently.",
             )
 
-        s1, s2, s3, s4 = st.columns(4)
+        s1, s2, s3 = st.columns(3)
         rice_shock = s1.slider(
             "Rice Price Shock (Δ pp)", -15.0, 25.0, key="sim_rice", step=0.5,
-            help="Percentage-point change in local year-on-year rice inflation.",
+            help="Projected percentage-point jump or drop in local rice inflation.",
         )
         util_shock = s2.slider(
             "Electricity & LPG Shock (Δ pp)", -15.0, 25.0, key="sim_util", step=0.5,
-            help="Percentage-point shift in household electricity, gas, and cooking fuel inflation.",
+            help="Projected percentage-point shift in household electricity, gas, and cooking fuel.",
         )
         fuel_shock = s3.slider(
             "Diesel & Pump Fuel Shock (Δ pp)", -15.0, 25.0, key="sim_fuel", step=0.5,
-            help="Percentage-point pump fuel shock with 45% pass-through into public transport fares.",
-        )
-        gwpi_shock = s4.slider(
-            "Wholesale GWPI Spillover (Δ pp)", -10.0, 20.0, key="sim_gwpi", step=0.5,
-            help="Upstream island wholesale inflation shift feeding into next-month retail prices.",
+            help="Projected pump fuel shock including 45% spillover into public transport fares.",
         )
 
-        res_main = compute_province_shock(con, eng, sel_prov, rice_shock, util_shock, fuel_shock, gwpi_shock)
-        res_cmp = compute_province_shock(con, eng, cmp_prov, rice_shock, util_shock, fuel_shock, gwpi_shock)
-        audit_queries.append((
-            f"Simulator Province History ({sel_prov} & {cmp_prov})",
-            len(res_main["prov_hist"]) + len(res_cmp["prov_hist"]),
-            f"SELECT * FROM prov_panel WHERE clean_geo IN ('{sel_prov}', '{cmp_prov}') ORDER BY obs_date DESC LIMIT 18",
-        ))
-
+        res_main = compute_province_shock(con, eng, sel_prov, rice_shock, util_shock, fuel_shock)
         prov_hist = res_main["prov_hist"]
         latest_row = res_main["latest_row"]
+        audit_queries.append((
+            f"Simulator Local Series ({sel_prov})",
+            len(prov_hist),
+            f"SELECT * FROM prov_panel WHERE clean_geo = '{sel_prov}' ORDER BY obs_date DESC LIMIT 18",
+        ))
 
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3 = st.columns(3)
         m1.metric(
-            "Baseline Next-Month Forecast",
-            f"{res_main['base_pred']:.2f}%",
-            f"Latest ({latest_row['obs_date'].iloc[0].strftime('%b %Y')}): {float(latest_row['headline_yoy_pct'].iloc[0]):.2f}%",
-            delta_color="off",
-            border=True,
-            help="Unshocked Ridge Regression forecast for next month.",
-        )
-        m2.metric(
-            "Shocked Ridge Forecast (t+1)",
+            "Ordinary Household Forecast (t+1)",
             f"{res_main['sim_pred']:.2f}%",
-            f"{res_main['sim_pred'] - res_main['base_pred']:+.2f} pp (XGB: {res_main['xgb_sim_pred']:.2f}%)",
+            f"{res_main['sim_pred'] - res_main['base_pred']:+.2f} pp vs baseline ({res_main['direct_acct_pp']:+.2f} pp direct)",
             delta_color="inverse",
             border=True,
-            help=f"Post-shock forecast; 80% Quantile interval spans {res_main['sim_q10']:.2f}% to {res_main['sim_q90']:.2f}%.",
+            help=f"Next-month All-Income Ridge forecast; 80% uncertainty band spans {res_main['sim_q10']:.2f}% to {res_main['sim_q90']:.2f}%.",
         )
-        m3.metric(
-            "Direct Basket Pass-Through",
-            f"{res_main['direct_acct_pp']:+.2f} pp",
-            f"Bottom-30% Extra Rice Hit: {res_main['b30_extra_pp']:+.2f} pp",
+        m2.metric(
+            "Bottom-30% Household Forecast (t+1)",
+            f"{res_main['b30_sim_pred']:.2f}%",
+            f"{res_main['b30_sim_pred'] - res_main['b30_base_pred']:+.2f} pp vs baseline ({res_main['b30_direct_pp']:+.2f} pp direct)",
             delta_color="inverse",
             border=True,
             help=(
-                f"Direct accounting shift from {sel_prov}'s 2018 weights ({res_main['w_rice_pct']:.1f}% general rice "
-                f"share vs {res_main['b30_rice_w_pct']:.1f}% Bottom-30% rice share)."
+                f"Dedicated Bottom-30% Ridge forecast. In {sel_prov}, rice carries {res_main['b30_rice_w_pct']:.1f}% "
+                f"of low-income budgets versus {res_main['w_rice_pct']:.1f}% overall."
             ),
         )
-        m4.metric(
-            ">4.0% Breach Probability",
+        m3.metric(
+            ">4.0% Alert Probability",
             f"{res_main['sim_prob']:.1%}",
-            f"{(res_main['sim_prob'] - res_main['base_prob']) * 100:+.1f} pp vs Baseline",
+            f"{(res_main['sim_prob'] - res_main['base_prob']) * 100:+.1f} pp vs baseline",
             delta_color="inverse",
             border=True,
-            help="XGBoost Classifier probability of exceeding the 4.0% BSP target ceiling next month.",
+            help="XGBoost probability that next month's provincial inflation exceeds the 4.0% alert ceiling.",
         )
 
-        v_left, v_right = st.columns([1.45, 1.0])
-        with v_left:
-            next_dt = prov_hist["obs_date"].max() + pd.DateOffset(months=1)
-            fig_sim = go.Figure()
-            fig_sim.add_hrect(
-                y0=2.0, y1=4.0, fillcolor="rgba(5,150,105,0.11)", line_width=0,
-                annotation_text="BSP 2%–4% Target", annotation_position="top left",
+        next_dt = prov_hist["obs_date"].max() + pd.DateOffset(months=1)
+        fig_sim = go.Figure()
+        fig_sim.add_hrect(
+            y0=2.0, y1=4.0, fillcolor="rgba(5,150,105,0.11)", line_width=0,
+            annotation_text="2%–4% Stability Band", annotation_position="top left",
+        )
+        fig_sim.add_trace(go.Scatter(
+            x=prov_hist["obs_date"], y=prov_hist["headline_yoy_pct"], mode="lines+markers",
+            name="Observed Ordinary YoY (%)", line=dict(color="#0F172A", width=2.2),
+        ))
+        fig_sim.add_trace(go.Scatter(
+            x=prov_hist["obs_date"], y=prov_hist["b30_headline_yoy_pct"], mode="lines",
+            name="Observed Bottom-30% YoY (%)", line=dict(color="#D97706", dash="dot", width=1.9),
+        ))
+        fig_sim.add_trace(go.Scatter(
+            x=[prov_hist["obs_date"].max(), next_dt],
+            y=[prov_hist["headline_yoy_pct"].iloc[-1], res_main["sim_pred"]],
+            mode="lines+markers", name="Shocked Ordinary Forecast",
+            line=dict(color="#2563EB", width=2.6),
+        ))
+        fig_sim.add_trace(go.Scatter(
+            x=[prov_hist["obs_date"].max(), next_dt],
+            y=[prov_hist["b30_headline_yoy_pct"].iloc[-1], res_main["b30_sim_pred"]],
+            mode="lines+markers", name="Shocked Bottom-30% Forecast",
+            line=dict(color="#DC2626", width=2.6),
+        ))
+        fig_sim.add_trace(go.Scatter(
+            x=[next_dt, next_dt], y=[res_main["sim_q10"], res_main["sim_q90"]],
+            mode="lines", name="80% Forecast Interval",
+            line=dict(color="#2563EB", width=8), opacity=0.28,
+        ))
+        fig_sim.update_layout(
+            height=360,
+            title=f"Next-Month Household Impact: {sel_prov} ({latest_row['parent_region'].iloc[0]})",
+            yaxis_title="YoY Inflation (%)", margin=dict(t=42, b=18), hovermode="x unified",
+        )
+
+        if show_cmp:
+            default_cmp = "Camarines Sur" if sel_prov != "Camarines Sur" and "Camarines Sur" in provs else (
+                "City of Baguio" if sel_prov != "City of Baguio" and "City of Baguio" in provs else provs[0]
             )
-            fig_sim.add_trace(go.Scatter(
-                x=prov_hist["obs_date"], y=prov_hist["headline_yoy_pct"], mode="lines+markers",
-                name="Observed YoY (%)", line=dict(color="#0F172A", width=2.3),
-            ))
-            fig_sim.add_trace(go.Scatter(
-                x=[prov_hist["obs_date"].max(), next_dt],
-                y=[prov_hist["headline_yoy_pct"].iloc[-1], res_main["base_pred"]],
-                mode="lines+markers", name="Baseline Forecast",
-                line=dict(color="#2563EB", dash="dot", width=2.3),
-            ))
-            fig_sim.add_trace(go.Scatter(
-                x=[prov_hist["obs_date"].max(), next_dt],
-                y=[prov_hist["headline_yoy_pct"].iloc[-1], res_main["sim_pred"]],
-                mode="lines+markers", name="Shock Scenario Forecast",
-                line=dict(color="#DC2626", width=2.7),
-            ))
-            fig_sim.add_trace(go.Scatter(
-                x=[next_dt, next_dt], y=[res_main["sim_q10"], res_main["sim_q90"]],
-                mode="lines", name="Simulated 80% Interval",
-                line=dict(color="#DC2626", width=8), opacity=0.35,
-            ))
-            fig_sim.update_layout(
-                height=360,
-                title=f"Simulated Trajectory & 80% Interval: {sel_prov} ({latest_row['parent_region'].iloc[0]})",
-                yaxis_title="YoY Inflation (%)", margin=dict(t=45, b=20), hovermode="x unified",
+            cmp_prov = st.selectbox(
+                "Comparison Province or City",
+                provs,
+                index=provs.index(default_cmp),
+                help="Contrasts how the exact same price shock hits a second locality with different basket weights.",
             )
+            res_cmp = compute_province_shock(con, eng, cmp_prov, rice_shock, util_shock, fuel_shock)
+            v_left, v_right = st.columns([1.45, 1.0])
+            with v_left:
+                st.plotly_chart(fig_sim, width="stretch")
+            with v_right:
+                cmp_df = pd.DataFrame([
+                    {"Locality": sel_prov, "Household Group": "Ordinary Pass-Through", "Impact_pp": round(res_main["direct_acct_pp"], 2)},
+                    {"Locality": sel_prov, "Household Group": "Bottom-30% Pass-Through", "Impact_pp": round(res_main["b30_direct_pp"], 2)},
+                    {"Locality": cmp_prov, "Household Group": "Ordinary Pass-Through", "Impact_pp": round(res_cmp["direct_acct_pp"], 2)},
+                    {"Locality": cmp_prov, "Household Group": "Bottom-30% Pass-Through", "Impact_pp": round(res_cmp["b30_direct_pp"], 2)},
+                ])
+                fig_cmp = px.bar(
+                    cmp_df, x="Locality", y="Impact_pp", color="Household Group", barmode="group",
+                    color_discrete_sequence=["#1D4ED8", "#DC2626"],
+                    title="Same Shock Across Two Localities",
+                    labels={"Impact_pp": "Direct Price Shift (pp)", "Locality": ""},
+                )
+                fig_cmp.update_layout(height=360, margin=dict(t=42, b=18), legend=dict(orientation="h", y=-0.18))
+                st.plotly_chart(fig_cmp, width="stretch")
+        else:
             st.plotly_chart(fig_sim, width="stretch")
 
-        with v_right:
-            cmp_df = pd.DataFrame([
-                {"Province": sel_prov, "Channel": "General Basket Impact", "Impact_pp": round(res_main["direct_acct_pp"], 2)},
-                {"Province": sel_prov, "Channel": "Bottom-30% Extra Rice Burden", "Impact_pp": round(res_main["b30_extra_pp"], 2)},
-                {"Province": cmp_prov, "Channel": "General Basket Impact", "Impact_pp": round(res_cmp["direct_acct_pp"], 2)},
-                {"Province": cmp_prov, "Channel": "Bottom-30% Extra Rice Burden", "Impact_pp": round(res_cmp["b30_extra_pp"], 2)},
-            ])
-            fig_cmp = px.bar(
-                cmp_df, x="Province", y="Impact_pp", color="Channel", barmode="group",
-                color_discrete_sequence=["#1D4ED8", "#D97706"],
-                title="Cross-Province Basket Sensitivity",
-                labels={"Impact_pp": "Direct Price Shift (pp)", "Province": ""},
-            )
-            fig_cmp.update_layout(height=360, margin=dict(t=45, b=20), legend=dict(orientation="h", y=-0.18))
-            st.plotly_chart(fig_cmp, width="stretch")
-
-        if res_main["sim_prob"] >= 0.50 or res_main["sim_pred"] > 4.0:
+        if res_main["sim_prob"] >= 0.50 or res_main["sim_pred"] > 4.0 or res_main["b30_sim_pred"] > 4.0:
+            ord_cost = 10000 * (1 + res_main["sim_pred"] / 100.0)
+            b30_cost = 10000 * (1 + res_main["b30_sim_pred"] / 100.0)
             st.warning(
-                f"**Policy Risk Advisory ({sel_prov}):** Projected next-month inflation reaches "
-                f"**`{res_main['sim_pred']:.2f}%`** (`{res_main['sim_prob']:.1%}` breach probability), with Bottom-30% "
-                f"households absorbing an additional **`{res_main['b30_extra_pp']:+.2f} pp`** rice impact "
-                f"(`{res_main['b30_rice_w_pct']:.1f}%` low-income rice share vs `{res_main['w_rice_pct']:.1f}%` general). "
-                "Priority response: local Price Coordinating Council monitoring, Kadiwa buffer-stock releases, and "
-                "targeted food or transport relief."
+                f"**LPCC Action Advisory for {sel_prov}:** Ordinary inflation is projected at "
+                f"**`{res_main['sim_pred']:.2f}%`** (a `₱10,000` basket from last year costs roughly **`₱{ord_cost:,.0f}`**) "
+                f"and Bottom-30% inflation at **`{res_main['b30_sim_pred']:.2f}%`** (**`₱{b30_cost:,.0f}`**, with "
+                f"`{res_main['sim_prob']:.1%}` alert probability). Because low-income households in {sel_prov} spend "
+                f"**`{res_main['b30_rice_w_pct']:.1f}%`** of their budget on rice versus **`{res_main['w_rice_pct']:.1f}%`** "
+                f"overall, they absorb an extra **`{res_main['b30_extra_pp']:+.2f} pp`** direct rice burden. "
+                "Recommended DTI and DA response: activate LPCC SRP inspections, deploy Kadiwa rolling stores and "
+                "NFA buffer rice, and prioritize targeted food or transport relief for Bottom-30% families."
             )
         else:
             st.success(
-                f"**Stability Assessment ({sel_prov}):** Projected next-month inflation remains at "
-                f"**`{res_main['sim_pred']:.2f}%`** (`{res_main['sim_prob']:.1%}` breach probability), holding "
-                "within or below the `4.0%` BSP target ceiling."
+                f"**Stability Advisory for {sel_prov}:** Projected ordinary inflation (`{res_main['sim_pred']:.2f}%`) "
+                f"and Bottom-30% inflation (`{res_main['b30_sim_pred']:.2f}%`) stay within the `4.0%` benchmark "
+                f"(`{res_main['sim_prob']:.1%}` alert probability). Maintain routine market monitoring."
             )
 
         render_section_footer(
             step_num=4,
             summary_line=(
-                "Local basket weights govern how national supply shocks translate into provincial breach probability "
-                "and low-income household strain."
+                "**Key Finding:** Local CPI basket weights determine how identical rice, electricity, and diesel "
+                "shocks translate into next-month household inflation and LPCC relief priorities."
             ),
             prev_idx=2,
-            prev_label="← Forecasts & Breach Risk",
+            prev_label="← Next-Month Forecasts & Alerts",
             next_idx=0,
-            next_label="Back to National vs. Local Reality",
+            next_label="Back to Household Price Exposure",
             next_primary=False,
         )
 
@@ -1414,8 +1404,8 @@ def main():
     st.markdown("")
     with st.expander("DuckDB SQL Audit Trail (<1,000 Aggregated Rows per View)"):
         st.caption(
-            "All charts execute parameterized SQL inside DuckDB over `2.2 MB` ZSTD Parquet marts so strictly fewer "
-            "than `1,000` aggregated rows pass to Plotly."
+            "Every visualization queries DuckDB SQL over `2.2 MB` ZSTD Parquet marts so strictly fewer than "
+            "`1,000` aggregated rows reach Plotly."
         )
         for q_title, row_cnt, q_sql in audit_queries:
             st.markdown(f"**{q_title}** · `{row_cnt:,}` rows")
