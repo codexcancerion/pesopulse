@@ -1,0 +1,51 @@
+feature,mean_abs_shap
+headline_yoy_pct,2.5043223
+yoy_roll3_mean,0.11355085
+natl_core_yoy_pct,0.10163574
+month_sin,0.08506746
+gwpi_all_yoy_lag1,0.07726585
+headline_mom_pct,0.07684272
+personal_fuel_yoy_pct,0.07443245
+transport_yoy_pct,0.06753744
+yoy_lag6,0.058311652
+gwpi_fuel_yoy_lag1,0.053288568
+yoy_lag12,0.049387325
+rice_cpi_yoy_pct,0.04687365
+food_bev_yoy_pct,0.045858048
+restaurants_accomm_yoy_pct,0.036120586
+ppp_index,0.035865556
+retail_rice_wm_php,0.031766605
+yoy_lag2,0.026034776
+yoy_lag3,0.025643984
+yoy_lag1,0.024359899
+retail_rice_wm_yoy_pct,0.02336804
+month_cos,0.023363873
+latitude,0.018815542
+yoy_roll6_std,0.017721144
+longitude,0.017358549
+elec_gas_fuel_yoy_pct,0.016544694
+b30_inflation_spread_pp,0.016391668
+food_bev_weight,0.01388266
+rice_weight,0.008668544
+elec_gas_fuel_weight,0.008220527
+parent_region_Region XI (Davao Region),0.0042010862
+island_group_Luzon,0.0040835794
+parent_region_Region VI (Western Visayas),0.002856821
+parent_region_Region III (Central Luzon),0.002524582
+parent_region_Region VIII (Eastern Visayas),0.0018921177
+parent_region_Region IX (Zamboanga Peninsula),0.0017767049
+parent_region_Region XII (SOCCSKSARGEN),0.0016007356
+parent_region_Region II (Cagayan Valley),0.0011158398
+parent_region_Cordillera Administrative Region (CAR),0.0010754731
+parent_region_Region I (Ilocos Region),0.0009240058
+parent_region_Region V (Bicol Region),0.0009222609
+parent_region_MIMAROPA Region,0.00091291056
+island_group_Visayas,0.00059553946
+parent_region_Region X (Northern Mindanao),0.0005799593
+island_group_Mindanao,0.00053572434
+parent_region_Region XIII (Caraga),0.0004162719
+parent_region_Negros Island Region (NIR),0.000401582
+parent_region_Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),0.00039413344
+parent_region_Region VII (Central Visayas),0.00029623866
+parent_region_National Capital Region (NCR),0.0
+parent_region_Region IV-A (CALABARZON),0.0

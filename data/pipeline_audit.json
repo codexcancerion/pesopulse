@@ -1,0 +1,21 @@
+{
+  "raw_cpi_csv_rows": 42480,
+  "raw_cpi_monthly_cells": 4502880,
+  "cpi_key_long_rows": 254082,
+  "provincial_panel_rows": 10706,
+  "provincial_panel_yoy_nonnull_rows": 9494,
+  "subnational_units": 101,
+  "regions_represented": 18,
+  "date_range": "2018-01-01 00:00:00 to 2026-10-01 00:00:00",
+  "engineered_columns": 55,
+  "missing_retail_rice_wm_rows": 212,
+  "missing_gwpi_rows": 1313,
+  "missing_b30_rows": 1212,
+  "files_generated": [
+    "data/dim_geolocation.csv",
+    "data/cpi_division_monthly.parquet",
+    "data/cpi_provincial_ml_panel.csv",
+    "data/cpi_provincial_ml_panel.parquet",
+    "data/cpi_regional_monthly.csv"
+  ]
+}

@@ -1,0 +1,121 @@
+raw_geo,clean_geo,geo_level,parent_region,island_group,latitude,longitude,is_subnational_leaf
+PHILIPPINES,PHILIPPINES,National,Philippines,Philippines,,,False
+..National Capital Region (NCR),National Capital Region (NCR),Region,National Capital Region (NCR),Luzon,14.6,120.98,True
+..Areas Outside National Capital Region (AONCR),Areas Outside National Capital Region (AONCR),Aggregate,AONCR,Luzon,,,False
+..Cordillera Administrative Region (CAR),Cordillera Administrative Region (CAR),Region,Cordillera Administrative Region (CAR),Luzon,,,False
+....Abra,Abra,Province/HUC,Cordillera Administrative Region (CAR),Luzon,17.59,120.79,True
+....Benguet,Benguet,Province/HUC,Cordillera Administrative Region (CAR),Luzon,16.5,120.66,True
+....Ifugao,Ifugao,Province/HUC,Cordillera Administrative Region (CAR),Luzon,16.83,121.17,True
+....Kalinga,Kalinga,Province/HUC,Cordillera Administrative Region (CAR),Luzon,17.42,121.35,True
+....Mountain Province,Mountain Province,Province/HUC,Cordillera Administrative Region (CAR),Luzon,17.08,121.08,True
+....Apayao,Apayao,Province/HUC,Cordillera Administrative Region (CAR),Luzon,18.02,121.18,True
+....City of Baguio,City of Baguio,Province/HUC,Cordillera Administrative Region (CAR),Luzon,16.41,120.6,True
+..Region I (Ilocos Region),Region I (Ilocos Region),Region,Region I (Ilocos Region),Luzon,,,False
+....Ilocos Norte,Ilocos Norte,Province/HUC,Region I (Ilocos Region),Luzon,18.17,120.71,True
+....Ilocos Sur,Ilocos Sur,Province/HUC,Region I (Ilocos Region),Luzon,17.28,120.47,True
+....La Union,La Union,Province/HUC,Region I (Ilocos Region),Luzon,16.62,120.32,True
+....Pangasinan,Pangasinan,Province/HUC,Region I (Ilocos Region),Luzon,15.92,120.33,True
+..Region II (Cagayan Valley),Region II (Cagayan Valley),Region,Region II (Cagayan Valley),Luzon,,,False
+....Batanes,Batanes,Province/HUC,Region II (Cagayan Valley),Luzon,20.45,121.97,True
+....Cagayan,Cagayan,Province/HUC,Region II (Cagayan Valley),Luzon,17.9,121.8,True
+....Isabela,Isabela,Province/HUC,Region II (Cagayan Valley),Luzon,16.98,121.85,True
+....Nueva Vizcaya,Nueva Vizcaya,Province/HUC,Region II (Cagayan Valley),Luzon,16.33,121.14,True
+....Quirino,Quirino,Province/HUC,Region II (Cagayan Valley),Luzon,16.27,121.53,True
+..Region III (Central Luzon),Region III (Central Luzon),Region,Region III (Central Luzon),Luzon,,,False
+....Bataan,Bataan,Province/HUC,Region III (Central Luzon),Luzon,14.68,120.45,True
+....Bulacan,Bulacan,Province/HUC,Region III (Central Luzon),Luzon,14.85,120.88,True
+....Nueva Ecija,Nueva Ecija,Province/HUC,Region III (Central Luzon),Luzon,15.58,121.0,True
+....Pampanga,Pampanga,Province/HUC,Region III (Central Luzon),Luzon,15.05,120.67,True
+....Tarlac,Tarlac,Province/HUC,Region III (Central Luzon),Luzon,15.48,120.6,True
+....Zambales,Zambales,Province/HUC,Region III (Central Luzon),Luzon,15.28,120.12,True
+....Aurora,Aurora,Province/HUC,Region III (Central Luzon),Luzon,15.77,121.55,True
+....City of Angeles,City of Angeles,Province/HUC,Region III (Central Luzon),Luzon,15.15,120.59,True
+....City of Olongapo,City of Olongapo,Province/HUC,Region III (Central Luzon),Luzon,14.83,120.28,True
+..Region IV-A (CALABARZON),Region IV-A (CALABARZON),Region,Region IV-A (CALABARZON),Luzon,,,False
+....Batangas,Batangas,Province/HUC,Region IV-A (CALABARZON),Luzon,13.76,121.06,True
+....Cavite,Cavite,Province/HUC,Region IV-A (CALABARZON),Luzon,14.28,120.88,True
+....Laguna,Laguna,Province/HUC,Region IV-A (CALABARZON),Luzon,14.17,121.33,True
+....Quezon,Quezon,Province/HUC,Region IV-A (CALABARZON),Luzon,14.03,121.92,True
+....Rizal,Rizal,Province/HUC,Region IV-A (CALABARZON),Luzon,14.58,121.25,True
+....City of Lucena (Capital),City of Lucena (Capital),Province/HUC,Region IV-A (CALABARZON),Luzon,13.93,121.62,True
+..MIMAROPA Region,MIMAROPA Region,Region,MIMAROPA Region,Luzon,,,False
+....Marinduque,Marinduque,Province/HUC,MIMAROPA Region,Luzon,13.38,121.95,True
+....Occidental Mindoro,Occidental Mindoro,Province/HUC,MIMAROPA Region,Luzon,13.0,120.92,True
+....Oriental Mindoro,Oriental Mindoro,Province/HUC,MIMAROPA Region,Luzon,13.0,121.4,True
+....Palawan,Palawan,Province/HUC,MIMAROPA Region,Luzon,9.83,118.74,True
+....Romblon,Romblon,Province/HUC,MIMAROPA Region,Luzon,12.5,122.27,True
+....City of Puerto Princesa (Capital),City of Puerto Princesa (Capital),Province/HUC,MIMAROPA Region,Luzon,9.74,118.73,True
+..Region V (Bicol Region),Region V (Bicol Region),Region,Region V (Bicol Region),Luzon,,,False
+....Albay,Albay,Province/HUC,Region V (Bicol Region),Luzon,13.18,123.62,True
+....Camarines Norte,Camarines Norte,Province/HUC,Region V (Bicol Region),Luzon,14.13,122.77,True
+....Camarines Sur,Camarines Sur,Province/HUC,Region V (Bicol Region),Luzon,13.62,123.25,True
+....Catanduanes,Catanduanes,Province/HUC,Region V (Bicol Region),Luzon,13.78,124.22,True
+....Masbate,Masbate,Province/HUC,Region V (Bicol Region),Luzon,12.22,123.58,True
+....Sorsogon,Sorsogon,Province/HUC,Region V (Bicol Region),Luzon,12.92,124.0,True
+..Region VI (Western Visayas),Region VI (Western Visayas),Region,Region VI (Western Visayas),Luzon,,,False
+....Aklan,Aklan,Province/HUC,Region VI (Western Visayas),Visayas,11.67,122.33,True
+....Antique,Antique,Province/HUC,Region VI (Western Visayas),Visayas,11.17,122.07,True
+....Capiz,Capiz,Province/HUC,Region VI (Western Visayas),Visayas,11.4,122.63,True
+....Iloilo,Iloilo,Province/HUC,Region VI (Western Visayas),Visayas,10.97,122.57,True
+....Guimaras,Guimaras,Province/HUC,Region VI (Western Visayas),Visayas,10.57,122.6,True
+....City of Iloilo (Capital),City of Iloilo (Capital),Province/HUC,Region VI (Western Visayas),Visayas,10.72,122.56,True
+..Region VII (Central Visayas),Region VII (Central Visayas),Region,Region VII (Central Visayas),Luzon,,,False
+....Bohol,Bohol,Province/HUC,Region VII (Central Visayas),Visayas,9.85,124.14,True
+....Cebu,Cebu,Province/HUC,Region VII (Central Visayas),Visayas,10.32,123.89,True
+....City of Cebu (Capital),City of Cebu (Capital),Province/HUC,Region VII (Central Visayas),Visayas,10.31,123.89,True
+....City of Lapu-Lapu,City of Lapu-Lapu,Province/HUC,Region VII (Central Visayas),Visayas,10.31,123.95,True
+....City of Mandaue,City of Mandaue,Province/HUC,Region VII (Central Visayas),Visayas,10.33,123.94,True
+..Region VIII (Eastern Visayas),Region VIII (Eastern Visayas),Region,Region VIII (Eastern Visayas),Luzon,,,False
+....Eastern Samar,Eastern Samar,Province/HUC,Region VIII (Eastern Visayas),Visayas,11.67,125.43,True
+....Leyte,Leyte,Province/HUC,Region VIII (Eastern Visayas),Visayas,10.85,124.85,True
+....Northern Samar,Northern Samar,Province/HUC,Region VIII (Eastern Visayas),Visayas,12.42,124.67,True
+....Samar,Samar,Province/HUC,Region VIII (Eastern Visayas),Visayas,11.83,125.0,True
+....Southern Leyte,Southern Leyte,Province/HUC,Region VIII (Eastern Visayas),Visayas,10.33,125.08,True
+....Biliran,Biliran,Province/HUC,Region VIII (Eastern Visayas),Visayas,11.58,124.48,True
+....City of Tacloban (Capital),City of Tacloban (Capital),Province/HUC,Region VIII (Eastern Visayas),Visayas,11.24,125.0,True
+..Region IX (Zamboanga Peninsula),Region IX (Zamboanga Peninsula),Region,Region IX (Zamboanga Peninsula),Mindanao,,,False
+....Zamboanga del Norte,Zamboanga del Norte,Province/HUC,Region IX (Zamboanga Peninsula),Mindanao,8.15,123.0,True
+....Zamboanga del Sur,Zamboanga del Sur,Province/HUC,Region IX (Zamboanga Peninsula),Mindanao,7.83,123.25,True
+....Zamboanga Sibugay,Zamboanga Sibugay,Province/HUC,Region IX (Zamboanga Peninsula),Mindanao,7.75,122.67,True
+....City of Zamboanga,City of Zamboanga,Province/HUC,Region IX (Zamboanga Peninsula),Mindanao,6.92,122.08,True
+....City of Isabela,City of Isabela,Province/HUC,Region IX (Zamboanga Peninsula),Mindanao,6.7,121.97,True
+..Region X (Northern Mindanao),Region X (Northern Mindanao),Region,Region X (Northern Mindanao),Mindanao,,,False
+....Bukidnon,Bukidnon,Province/HUC,Region X (Northern Mindanao),Mindanao,8.05,125.0,True
+....Camiguin,Camiguin,Province/HUC,Region X (Northern Mindanao),Mindanao,9.17,124.73,True
+....Lanao del Norte,Lanao del Norte,Province/HUC,Region X (Northern Mindanao),Mindanao,8.02,124.02,True
+....Misamis Occidental,Misamis Occidental,Province/HUC,Region X (Northern Mindanao),Mindanao,8.33,123.75,True
+....Misamis Oriental,Misamis Oriental,Province/HUC,Region X (Northern Mindanao),Mindanao,8.5,124.75,True
+....City of Iligan,City of Iligan,Province/HUC,Region X (Northern Mindanao),Mindanao,8.23,124.24,True
+....City of Cagayan de Oro (Capital),City of Cagayan de Oro (Capital),Province/HUC,Region X (Northern Mindanao),Mindanao,8.48,124.65,True
+..Region XI (Davao Region),Region XI (Davao Region),Region,Region XI (Davao Region),Mindanao,,,False
+....Davao del Norte,Davao del Norte,Province/HUC,Region XI (Davao Region),Mindanao,7.55,125.7,True
+....Davao del Sur,Davao del Sur,Province/HUC,Region XI (Davao Region),Mindanao,6.75,125.33,True
+....Davao Oriental,Davao Oriental,Province/HUC,Region XI (Davao Region),Mindanao,7.18,126.33,True
+....Davao de Oro,Davao de Oro,Province/HUC,Region XI (Davao Region),Mindanao,7.6,126.08,True
+....Davao Occidental,Davao Occidental,Province/HUC,Region XI (Davao Region),Mindanao,6.1,125.6,True
+....City of Davao,City of Davao,Province/HUC,Region XI (Davao Region),Mindanao,7.07,125.61,True
+..Region XII (SOCCSKSARGEN),Region XII (SOCCSKSARGEN),Region,Region XII (SOCCSKSARGEN),Mindanao,,,False
+....Cotabato,Cotabato,Province/HUC,Region XII (SOCCSKSARGEN),Mindanao,7.2,124.85,True
+....South Cotabato,South Cotabato,Province/HUC,Region XII (SOCCSKSARGEN),Mindanao,6.33,124.85,True
+....Sultan Kudarat,Sultan Kudarat,Province/HUC,Region XII (SOCCSKSARGEN),Mindanao,6.55,124.28,True
+....Sarangani,Sarangani,Province/HUC,Region XII (SOCCSKSARGEN),Mindanao,5.93,124.98,True
+....City of General Santos,City of General Santos,Province/HUC,Region XII (SOCCSKSARGEN),Mindanao,6.11,125.17,True
+..Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Region,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,,,False
+....City of Cotabato,City of Cotabato,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,7.22,124.25,True
+....Basilan,Basilan,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,6.58,122.03,True
+....Lanao del Sur,Lanao del Sur,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,7.82,124.42,True
+....Maguindanao,Maguindanao,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,6.95,124.42,True
+....Sulu,Sulu,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,5.98,121.12,True
+....Tawi-tawi,Tawi-tawi,Province/HUC,Bangsamoro Autonomous Region in Muslim Mindanao (BARMM),Mindanao,5.13,120.13,True
+..Region XIII (Caraga),Region XIII (Caraga),Region,Region XIII (Caraga),Luzon,,,False
+....Agusan del Norte,Agusan del Norte,Province/HUC,Region XIII (Caraga),Mindanao,9.0,125.53,True
+....Agusan del Sur,Agusan del Sur,Province/HUC,Region XIII (Caraga),Mindanao,8.55,125.85,True
+....Surigao del Norte,Surigao del Norte,Province/HUC,Region XIII (Caraga),Mindanao,9.68,125.55,True
+....Surigao del Sur,Surigao del Sur,Province/HUC,Region XIII (Caraga),Mindanao,8.67,126.15,True
+....Dinagat Islands,Dinagat Islands,Province/HUC,Region XIII (Caraga),Mindanao,10.13,125.6,True
+....City of Butuan (Capital),City of Butuan (Capital),Province/HUC,Region XIII (Caraga),Mindanao,8.95,125.54,True
+..Negros Island Region (NIR),Negros Island Region (NIR),Region,Negros Island Region (NIR),Visayas,,,False
+....Negros Occidental,Negros Occidental,Province/HUC,Negros Island Region (NIR),Visayas,10.42,123.02,True
+....City of Bacolod (Capital),City of Bacolod (Capital),Province/HUC,Negros Island Region (NIR),Visayas,10.68,122.95,True
+....Negros Oriental,Negros Oriental,Province/HUC,Negros Island Region (NIR),Visayas,9.62,123.02,True
+....Siquijor,Siquijor,Province/HUC,Negros Island Region (NIR),Visayas,9.2,123.58,True

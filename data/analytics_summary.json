@@ -1,0 +1,126 @@
+{
+  "project": "PesoPulse (Team 3): Forecasting Philippine Provincial Inflation Using Monthly CPI & Upstream Price Drivers",
+  "eda": {
+    "n_subnational_yoy_obs": 9494,
+    "mean_yoy_pct": 3.948,
+    "median_yoy_pct": 3.6,
+    "sd_yoy_pct": 2.845,
+    "iqr_yoy_pct": 3.7,
+    "skewness": 0.496,
+    "kurtosis_pearson": 3.251,
+    "tukey_upper_fence": 11.25,
+    "tukey_outlier_pct": 1.2
+  },
+  "hypothesis_tests": {
+    "H1_island_anova_F": 8.215,
+    "H1_island_anova_p": 0.0002723702789105983,
+    "H1_island_kruskal_H": 27.876,
+    "H1_regional_anova_F": 5.53,
+    "H1_regional_anova_p": 1.336269862041089e-12,
+    "H2_b30_vs_all_mean_diff_pp": 0.162,
+    "H2_b30_paired_t": 11.834,
+    "H2_b30_paired_p": 4.377681930082373e-32,
+    "H2_high_food_b30_diff_pp": 0.946,
+    "H2_high_food_paired_t": 43.515,
+    "H3_gwpi_lag1_pearson_r": 0.4341,
+    "H3_rice_yoy_pearson_r": 0.4544
+  },
+  "regression_oot_2025_2026": {
+    "Persistence Baseline": {
+      "MAE": 0.9293,
+      "RMSE": 1.3397,
+      "R2": 0.8668
+    },
+    "Ridge Regression": {
+      "CV_MAE": 0.9282,
+      "MAE": 0.9288,
+      "RMSE": 1.3028,
+      "R2": 0.8741
+    },
+    "Random Forest": {
+      "CV_MAE": 0.8748,
+      "MAE": 1.0504,
+      "RMSE": 1.4247,
+      "R2": 0.8494
+    },
+    "XGBoost Regressor": {
+      "CV_MAE": 0.915,
+      "MAE": 1.1588,
+      "RMSE": 1.5404,
+      "R2": 0.8239
+    }
+  },
+  "uncertainty_coverage": {
+    "empirical_80pct_cov": 62.89,
+    "empirical_95pct_cov": 75.53
+  },
+  "classification_breach_4pct_oot": {
+    "Logistic Regression": {
+      "ROC_AUC": 0.9799,
+      "PR_AUC": 0.972,
+      "Accuracy": 0.9236,
+      "F1": 0.8929,
+      "Precision": 0.9441,
+      "Recall": 0.8469
+    },
+    "Random Forest Clf": {
+      "ROC_AUC": 0.9646,
+      "PR_AUC": 0.96,
+      "Accuracy": 0.9231,
+      "F1": 0.8917,
+      "Precision": 0.9477,
+      "Recall": 0.8419
+    },
+    "XGBoost Classifier": {
+      "ROC_AUC": 0.9755,
+      "PR_AUC": 0.9683,
+      "Accuracy": 0.926,
+      "F1": 0.8968,
+      "Precision": 0.942,
+      "Recall": 0.8557
+    }
+  },
+  "national_sarimax_oot_mae": 2.2003,
+  "top_10_treeshap_features": [
+    {
+      "feature": "headline_yoy_pct",
+      "mean_abs_shap": 2.5043222904205322
+    },
+    {
+      "feature": "yoy_roll3_mean",
+      "mean_abs_shap": 0.11355084925889969
+    },
+    {
+      "feature": "natl_core_yoy_pct",
+      "mean_abs_shap": 0.10163573920726776
+    },
+    {
+      "feature": "month_sin",
+      "mean_abs_shap": 0.08506745845079422
+    },
+    {
+      "feature": "gwpi_all_yoy_lag1",
+      "mean_abs_shap": 0.07726585119962692
+    },
+    {
+      "feature": "headline_mom_pct",
+      "mean_abs_shap": 0.07684271782636642
+    },
+    {
+      "feature": "personal_fuel_yoy_pct",
+      "mean_abs_shap": 0.07443244755268097
+    },
+    {
+      "feature": "transport_yoy_pct",
+      "mean_abs_shap": 0.06753744184970856
+    },
+    {
+      "feature": "yoy_lag6",
+      "mean_abs_shap": 0.05831165239214897
+    },
+    {
+      "feature": "gwpi_fuel_yoy_lag1",
+      "mean_abs_shap": 0.05328856781125069
+    }
+  ]
+}
