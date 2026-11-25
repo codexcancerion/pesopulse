@@ -29,7 +29,7 @@ import streamlit.components.v1 as components
 import xgboost as xgb
 
 st.set_page_config(
-    page_title="PesoPulse | LPCC Provincial Inflation & Supply-Shock Intelligence",
+    page_title="PesoPulse | Philippine Provincial Inflation Monitor",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -438,11 +438,11 @@ def main():
 
     h_left, h_right = st.columns([3.5, 1.0])
     with h_left:
-        st.title("PesoPulse: Local Price Council Shock & Inflation Monitor")
+        st.title("PesoPulse: Philippine Provincial Inflation Monitor")
         st.markdown(
-            "Designed for **DTI and Department of Agriculture Local Price Coordinating Councils** to track local "
-            "inflation gaps across **`101` provinces and cities** and estimate how sudden jumps in **rice, electricity, "
-            "and diesel** hit ordinary and **Bottom-30% low-income households** next month."
+            "Track how inflation diverges across **`101` provinces and cities** and estimate how sudden jumps in "
+            "**rice, electricity, and diesel** hit ordinary and **Bottom-30% low-income households** next month, "
+            "supporting DTI and Department of Agriculture Local Price Coordinating Councils."
         )
     with h_right:
         st.markdown("")

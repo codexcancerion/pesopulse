@@ -1,4 +1,4 @@
-# PesoPulse: Local Price Council Shock & Inflation Monitor
+# PesoPulse: Philippine Provincial Inflation Monitor
 
 <div align="center">
 
